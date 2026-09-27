@@ -6,7 +6,7 @@ This website is the public showcase for **GabeCubeAura 1.0.0**. It accompanies
 the final plugin release and uses the same public identity throughout.
 
 The mockup now covers the product changes that were missing from the previous
-SignalBar showcase and replaces the temporary CubeGlow identity:
+SignalBar showcase:
 
 - the GabeCubeAura name and future `Albusquerque/GabeCubeAura` links;
 - Customization+ as a separate permanent display;
