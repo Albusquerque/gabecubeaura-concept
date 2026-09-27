@@ -6,18 +6,20 @@
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; object-src 'none'; base-uri 'none'">
   <meta name="theme-color" content="#0c131b">
-  <meta name="description" content="Try SignalBar's Steam Machine lighting modes and animations in an interactive, hardware-free simulator.">
-  <title>SignalBar Concept Lab · Try the 17-LED light bar</title>
+  <meta name="description" content="Try GabeCubeAura's Steam Machine lighting modes, Customization+ library and game-launch animations in an interactive simulator.">
+  <title>GabeCubeAura Concept Lab · Try the 17-LED light bar</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
+  <script src="event-frames.js" defer></script>
+  <script src="weather-frames.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
   <header class="site-header">
-    <a class="brand" href="#top" aria-label="SignalBar Concept Lab home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span>SignalBar <em>Concept Lab</em></span></a>
+    <a class="brand" href="#top" aria-label="GabeCubeAura Concept Lab home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span>GabeCubeAura <em>Concept Lab</em></span></a>
     <nav class="header-links" aria-label="Project links">
-      <a href="https://github.com/Albusquerque/SignalBar" target="_blank" rel="noopener noreferrer">GitHub</a>
-      <a href="https://github.com/Albusquerque/SignalBar/releases/latest" target="_blank" rel="noopener noreferrer" class="header-download">Get SignalBar ↗</a>
+      <a href="https://github.com/Albusquerque/GabeCubeAura" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a href="https://github.com/Albusquerque/GabeCubeAura/releases/latest" target="_blank" rel="noopener noreferrer" class="header-download">Get GabeCubeAura ↗</a>
     </nav>
   </header>
 
@@ -26,26 +28,28 @@
       <div class="hero-copy">
         <p class="eyebrow"><span class="eyebrow-dot"></span> INTERACTIVE PRODUCT PREVIEW</p>
         <h1 id="hero-title">What could your <span>light bar</span> tell you?</h1>
-        <p class="hero-lead">Try SignalBar's Artwork, Performance, Playtime, Steam moments, controller battery and Weather signals before installing anything. Change the numbers. Trigger an event. Watch the same 17 LEDs respond.</p>
-        <div class="hero-actions"><a class="button primary" href="#lab">Open the simulator <span aria-hidden="true">↘</span></a><a class="button ghost" href="https://github.com/Albusquerque/SignalBar#readme" target="_blank" rel="noopener noreferrer">Read the project ↗</a></div>
-        <p class="hero-note">Visual simulation only. It does not connect to your Steam account or control hardware.</p>
+        <p class="hero-lead">Build a permanent scene with Customization+, sample game artwork, or watch a two-colour launch sequence take the bar for a few seconds. Then explore performance, playtime, Steam moments, controllers and Weather.</p>
+        <div class="hero-actions"><a class="button primary" href="#lab">Open the simulator <span aria-hidden="true">↘</span></a><a class="button ghost" href="https://github.com/Albusquerque/GabeCubeAura#readme" target="_blank" rel="noopener noreferrer">Read the project ↗</a></div>
+        <p class="hero-note"><strong>GabeCubeAura 1.0.0 product preview.</strong> Visual simulation only; it does not connect to Steam or control hardware.</p>
       </div>
       <div class="hero-art" aria-hidden="true"><div class="hero-cube"><div class="hero-cube-face"></div><div class="hero-led"></div><div class="hero-base"><b></b><b></b><b></b><span></span></div></div><div class="hero-caption">17 PIXELS · ONE SIGNAL AT A TIME</div></div>
     </section>
 
     <section class="intro-strip" aria-label="Available simulations">
-      <span>PLAY WITH</span><strong>Artwork</strong><strong>CPU + GPU</strong><strong>Countdowns</strong><strong>Light events</strong><strong>Controllers</strong><strong>Weather</strong>
+      <span>PLAY WITH</span><strong>Customization+</strong><strong>Game launches</strong><strong>Artwork</strong><strong>CPU + GPU</strong><strong>Countdowns</strong><strong>Light events</strong><strong>Controllers</strong><strong>Weather</strong>
     </section>
 
     <section class="lab-section" id="lab" aria-labelledby="lab-title">
       <div class="section-heading"><div><p class="eyebrow">THE SIMULATOR</p><h2 id="lab-title">Make it yours. See it live.</h2></div><p>Every control is a sample input. Nothing is sent anywhere; Reset restores the starting values.</p></div>
       <div class="workbench">
         <div class="settings-shell">
-          <div class="settings-header"><span class="settings-icon" aria-hidden="true">✦</span><div><strong>SignalBar</strong><small>Interactive settings</small></div><span class="mock-badge">SIMULATION</span></div>
-          <nav class="tab-list" aria-label="SignalBar features">
+          <div class="settings-header"><span class="settings-icon" aria-hidden="true">✦</span><div><strong>GabeCubeAura</strong><small>1.0.0 · interactive settings</small></div><span class="mock-badge">SIMULATION</span></div>
+          <nav class="tab-list" aria-label="GabeCubeAura features">
             <button class="tab active" data-tab="overview" aria-selected="true"><span>◎</span> Explore</button>
+            <button class="tab" data-tab="customization" aria-selected="false"><span>✣</span> Customization+</button>
             <button class="tab" data-tab="artwork" aria-selected="false"><span>▧</span> Artwork</button>
             <button class="tab" data-tab="performance" aria-selected="false"><span>◫</span> Performance</button>
+            <button class="tab" data-tab="launches" aria-selected="false"><span>↗</span> Game launches</button>
             <button class="tab" data-tab="playtime" aria-selected="false"><span>◴</span> Playtime</button>
             <button class="tab" data-tab="events" aria-selected="false"><span>✧</span> Light events</button>
             <button class="tab" data-tab="controllers" aria-selected="false"><span>⌁</span> Controllers</button>
@@ -57,25 +61,60 @@
             <section class="pane active" data-pane="overview" aria-labelledby="overview-heading">
               <div class="pane-head"><p class="eyebrow">START HERE</p><h3 id="overview-heading">A signal for every moment.</h3><p>Pick a scenario, then open its controls to experiment.</p></div>
               <div class="scene-grid">
+                <button class="scene-card" data-preset="customization"><span class="scene-icon cyan">✣</span><strong>Customization+</strong><small>61 effects, exact colours and speed</small><span class="scene-arrow">↗</span></button>
+                <button class="scene-card" data-preset="launches"><span class="scene-icon gold">↗</span><strong>Game launch</strong><small>Artwork colours for a timed entrance</small><span class="scene-arrow">↗</span></button>
                 <button class="scene-card" data-preset="artwork"><span class="scene-icon violet">▧</span><strong>Game artwork</strong><small>Sample a game's colour palette</small><span class="scene-arrow">↗</span></button>
                 <button class="scene-card" data-preset="performance"><span class="scene-icon cyan">◫</span><strong>CPU + GPU</strong><small>Two temperature-aware meters</small><span class="scene-arrow">↗</span></button>
                 <button class="scene-card" data-preset="playtime"><span class="scene-icon amber">◴</span><strong>Time remaining</strong><small>Steam Families or your own timer</small><span class="scene-arrow">↗</span></button>
                 <button class="scene-card" data-preset="controllers"><span class="scene-icon green">⌁</span><strong>Two controllers</strong><small>Mirrored battery gauges</small><span class="scene-arrow">↗</span></button>
-                <button class="scene-card" data-preset="weather"><span class="scene-icon amber">☀</span><strong>Local weather</strong><small>Sixteen loops for eight sky conditions</small><span class="scene-arrow">↗</span></button>
+                <button class="scene-card" data-preset="weather"><span class="scene-icon amber">☀</span><strong>Local weather</strong><small>Eighteen loops for eight sky conditions</small><span class="scene-arrow">↗</span></button>
                 <button class="scene-card" data-preset="notification"><span class="scene-icon blue">✧</span><strong>Notification</strong><small>A short signal, then back to normal</small><span class="scene-arrow">↗</span></button>
                 <button class="scene-card" data-preset="achievement"><span class="scene-icon gold">✦</span><strong>Achievement</strong><small>Give a win its own celebration</small><span class="scene-arrow">↗</span></button>
               </div>
-              <div class="callout"><strong>Built to feel like the real thing.</strong><p>These are illustrative readings and sample artwork, not live Steam data. The event sequences are sampled from SignalBar's actual renderers; the physical glow is a browser approximation.</p></div>
+              <div class="callout"><strong>Built from GabeCubeAura's current library.</strong><p>The event and Weather sequences are sampled from the plugin renderers; Customization+ reuses their choreography. Launch patterns and the physical glow are browser simulations.</p></div>
+            </section>
+
+            <section class="pane" data-pane="customization" aria-labelledby="customization-heading">
+              <div class="pane-head"><p class="eyebrow">PERMANENT DISPLAY · 61 EFFECTS</p><h3 id="customization-heading">Your colours. Your rhythm.</h3><p>Choose a proven movement from Light Events, Controllers, Weather or Game Launches, then remap it to one, two or three precise colours.</p></div>
+              <label class="field">Pattern<select id="customPattern"></select></label>
+              <div class="form-grid"><label class="field">Palette<select id="customPaletteCount"><option value="1">1 colour</option><option value="2" selected>2 colours</option><option value="3">3 colours</option></select></label><label class="field">Direction<select id="customDirection"><option value="forward">Left to right</option><option value="reverse">Right to left</option></select></label></div>
+              <div class="precise-colours" id="customizationColours" aria-label="Customization colours">
+                <label><span>Colour 1</span><input type="color" id="customColour1" value="#ffd000"><input type="text" id="customHex1" value="#FFD000" maxlength="7" aria-label="Colour 1 hexadecimal"></label>
+                <label data-custom-colour="2"><span>Colour 2</span><input type="color" id="customColour2" value="#00c8ff"><input type="text" id="customHex2" value="#00C8FF" maxlength="7" aria-label="Colour 2 hexadecimal"></label>
+                <label data-custom-colour="3" hidden><span>Colour 3</span><input type="color" id="customColour3" value="#ff3c9d"><input type="text" id="customHex3" value="#FF3C9D" maxlength="7" aria-label="Colour 3 hexadecimal"></label>
+              </div>
+              <label class="slider-field" for="customBrightness"><span>Raw brightness <output id="customBrightnessValue">128 / 255</output></span><input id="customBrightness" type="range" min="34" max="255" step="1" value="128"></label>
+              <label class="slider-field" for="customSpeed"><span>Speed <output id="customSpeedValue">50 / 100</output></span><input id="customSpeed" type="range" min="1" max="100" step="1" value="50"></label>
+              <div class="button-row"><button class="button primary" id="customPreview">Preview Customization+</button></div>
+              <div class="callout compact"><strong>Steam's native effects stay in Steam.</strong><p>Patrol, Breathe, Rainbow and Solid are not imitated here. Choose <b>GabeCubeAura Off</b> in the real plugin to keep Valve's authentic effect between temporary GabeCubeAura signals.</p></div>
             </section>
 
             <section class="pane" data-pane="artwork" aria-labelledby="artwork-heading">
               <div class="pane-head"><p class="eyebrow">EVERYDAY DISPLAY / 01</p><h3 id="artwork-heading">A game's colours, on the machine.</h3><p>Choose a game or use your own image. Move the red line to pick the row sampled into 17 colours.</p></div>
               <div class="control-group"><span class="group-label">SAMPLE GAME</span><div class="segmented" role="group" aria-label="Sample game"><button data-game="drg" class="selected">Deep Rock</button><button data-game="witcher">The Witcher 3</button><button data-game="balatro">Balatro</button></div></div>
               <div class="form-grid"><label class="field">Steam image<select id="artSource"><option value="hero">Library Hero</option><option value="header">Library Header</option><option value="capsule">Library Capsule</option></select></label><label class="field">Sample row<select id="artMode"><option value="auto">Auto (best row)</option><option value="manual" selected>Manual</option><option value="center">Centre</option><option value="lower">Lower</option></select></label></div>
-              <label class="field">Display for this game<select id="gameDisplay"><option value="inherit">Use global choice</option><option value="artwork">Always Artwork</option><option value="performance">Always Performance</option></select></label>
+              <label class="field">Display for this game<select id="gameDisplay"><option value="inherit">Use global choice</option><option value="customization">Always Customization+</option><option value="artwork">Always Artwork</option><option value="performance">Always Performance</option><option value="disabled">GabeCubeAura Off</option></select></label>
               <label class="slider-field" for="artRow"><span>Vertical position <output id="artRowValue">59%</output></span><input id="artRow" type="range" min="0" max="100" value="59"></label>
               <div class="art-preview"><div class="art-image-wrap"><img id="artImage" alt="Sample game artwork" src="assets/drg-hero.jpg"><span id="sampleLine"></span></div><div class="art-preview-foot"><strong id="artTitle">Deep Rock Galactic</strong><span id="artTypeLabel">Library Hero · row 59%</span></div></div>
               <label class="upload-button">Try your own image <input id="artUpload" type="file" accept="image/*"><span>Choose file ↗</span></label><p class="field-help">Your image stays on this device. Nothing is uploaded. The real plugin uses locally installed Steam artwork, including SteamGridDB replacements.</p>
+            </section>
+
+            <section class="pane" data-pane="launches" aria-labelledby="launches-heading">
+              <div class="pane-head"><p class="eyebrow">TEMPORARY LAYER · PER APPID</p><h3 id="launches-heading">Give every game an entrance.</h3><p>Detect the running Steam AppID, take two or three dominant colours from its local artwork, and play a timed animation before the normal display returns.</p></div>
+              <div class="control-group"><span class="group-label">SAMPLE APPID</span><div class="segmented" role="group" aria-label="Launch sample game"><button data-launch-game="drg" class="selected">548430 · Deep Rock</button><button data-launch-game="witcher">292030 · Witcher 3</button><button data-launch-game="balatro">2379780 · Balatro</button></div></div>
+              <div class="form-grid"><label class="field">Artwork image<select id="launchSource"><option value="hero">Library Hero</option><option value="header">Library Header</option><option value="capsule">Library Capsule</option></select></label><label class="field">Palette source<select id="launchPaletteMode"><option value="artwork">From artwork</option><option value="custom">Custom for this AppID</option></select></label></div>
+              <div class="form-grid"><label class="field">Number of colours<select id="launchColourCount"><option value="2" selected>2 dominant colours</option><option value="3">3 dominant colours</option></select></label><label class="field">Pattern<select id="launchPattern"></select></label></div>
+              <div class="precise-colours" id="launchCustomColours" hidden aria-label="Custom launch colours">
+                <label><span>Launch colour 1</span><input type="color" id="launchColour1" value="#ffd000"><input type="text" id="launchHex1" value="#FFD000" maxlength="7" aria-label="Launch colour 1 hexadecimal"></label>
+                <label><span>Launch colour 2</span><input type="color" id="launchColour2" value="#00c8ff"><input type="text" id="launchHex2" value="#00C8FF" maxlength="7" aria-label="Launch colour 2 hexadecimal"></label>
+                <label data-launch-colour="3" hidden><span>Launch colour 3</span><input type="color" id="launchColour3" value="#ff3c9d"><input type="text" id="launchHex3" value="#FF3C9D" maxlength="7" aria-label="Launch colour 3 hexadecimal"></label>
+              </div>
+              <label class="slider-field" for="launchDuration"><span>Animation duration <output id="launchDurationValue">20 s</output></span><input id="launchDuration" type="range" min="3" max="45" step="1" value="20"></label>
+              <div class="button-row"><button class="button primary" id="launchPreview">Preview launch animation</button><span class="timer-pill" id="launchStatus">Ready · 20 s</span></div>
+              <div class="art-preview launch-preview"><div class="art-image-wrap"><img id="launchArtImage" alt="Artwork used for launch colour extraction" src="assets/drg-hero.jpg"></div><div class="art-preview-foot"><strong id="launchArtTitle">Deep Rock Galactic · AppID 548430</strong><span id="launchArtType">Library Hero · artwork palette</span></div></div>
+              <div class="dominant-palette" id="launchPalette" aria-label="Detected launch palette"></div>
+              <p class="palette-status" id="launchPaletteStatus" aria-live="polite">Analysing artwork colours…</p>
+              <p class="field-help">The real plugin reads installed Steam artwork, including SteamGridDB replacements, locally. Both the two- and three-colour custom palettes are retained separately for each AppID. Nothing is uploaded.</p>
             </section>
 
             <section class="pane" data-pane="performance" aria-labelledby="performance-heading">
@@ -122,7 +161,7 @@
               <label class="slider-field" for="lowThreshold"><span>Low-battery warning at <output id="lowThresholdValue">20%</output></span><input id="lowThreshold" type="range" min="5" max="40" value="20"></label>
               <label class="slider-field" for="padBrightness"><span>Controller brightness <output id="padBrightnessValue">65%</output></span><input id="padBrightness" type="range" min="10" max="100" value="65"></label>
               <div class="colour-row"><label>Healthy <input type="color" id="padHealthy" value="#00b42d"></label><label>Medium <input type="color" id="padMedium" value="#e66e00"></label><label>Low <input type="color" id="padLow" value="#dc0c18"></label><label>Charge <input type="color" id="padCharge" value="#0091dc"></label></div>
-              <p class="field-help">Preview plays manually in either context. Automatic alert placement follows your Home/in-game choice. Real battery data depends on what Steam reports for each controller. <a href="https://albusquerque.github.io/signalbar-controller-battery/" target="_blank" rel="noopener noreferrer">Dedicated controller mockup ↗</a></p>
+              <p class="field-help">Preview plays manually in either context. Automatic alert placement follows your Home/in-game choice. Real battery data depends on what Steam reports for each controller. <a href="https://albusquerque.github.io/gabecubeaura-controller-battery/" target="_blank" rel="noopener noreferrer">Dedicated controller mockup ↗</a></p>
             </section>
 
             <section class="pane" data-pane="weather" aria-labelledby="weather-heading">
@@ -139,8 +178,8 @@
 
             <section class="pane" data-pane="priorities" aria-labelledby="priorities-heading">
               <div class="pane-head"><p class="eyebrow">HOW IT COEXISTS</p><h3 id="priorities-heading">One bar, clear priorities.</h3><p>Signals do not all play at once. The most important active message takes the bar, then the underlying display comes back.</p></div>
-              <ol class="priority-list"><li><b>Disabled</b><span>SignalBar stops and returns control to Steam.</span></li><li><b>Steam takes control</b><span>SignalBar yields to a new native LED write.</span></li><li><b>Critical countdown</b><span>The final five minutes protect the timer from light events.</span></li><li><b>Short alerts</b><span>Notifications, achievements, captures and controller warnings appear briefly.</span></li><li><b>Active countdown</b><span>Steam Families or your personal timer replaces the base display.</span></li><li><b>Controller gauge or Weather</b><span>Choose one permanent signal for Home, in game or everywhere.</span></li><li><b>Artwork or Performance</b><span>Your everyday display, when nothing higher is active.</span></li></ol>
-              <div class="form-grid"><label class="field">Context<select id="contextChoice"><option value="game">In game</option><option value="home">Steam Home</option></select></label><label class="field">Base display<select id="displayChoice"><option value="artwork">Artwork</option><option value="performance" selected>Performance</option><option value="disabled">Disabled</option></select></label></div>
+              <ol class="priority-list"><li><b>Master disabled</b><span>GabeCubeAura stops every output and returns complete control to Steam.</span></li><li><b>Steam takes control</b><span>GabeCubeAura yields to a new native LED write.</span></li><li><b>Critical countdown</b><span>The final five minutes protect the timer from launch animations and events.</span></li><li><b>Short alerts</b><span>Notifications, achievements, captures and controller warnings pause a Game launch.</span></li><li><b>Game launch</b><span>The artwork animation resumes after an alert and keeps its full visible timer.</span></li><li><b>Active countdown</b><span>Steam Families or your personal timer replaces the permanent display.</span></li><li><b>Permanent display</b><span>Customization+, Artwork, Performance, Controllers or Weather returns underneath.</span></li><li><b>GabeCubeAura Off</b><span>No permanent GabeCubeAura scene; temporary layers can still appear.</span></li></ol>
+              <div class="form-grid"><label class="field">Context<select id="contextChoice"><option value="game">In game</option><option value="home">Steam Home</option></select></label><label class="field">Permanent display<select id="displayChoice"><option value="customization">Customization+</option><option value="artwork">Artwork</option><option value="performance" selected>Performance</option><option value="disabled">GabeCubeAura Off</option></select></label></div>
               <label class="slider-field" for="extraDark"><span>Extra dark physical LEDs <output id="extraDarkValue">2</output></span><input id="extraDark" type="range" min="0" max="5" value="2"></label>
               <label class="toggle-line"><input type="checkbox" id="reversePhysical" checked><span><strong>Reverse physical LED order</strong><small>Matches the Steam Machine's hardware mapping; logical preview stays left to right.</small></span></label>
               <div class="button-row"><button class="button ghost" id="priorityDemo">Set timer to 4 min</button><button class="button ghost" id="priorityNotify">Send a notification</button><button class="button ghost" id="resetDemo">Reset simulator</button></div>
@@ -162,7 +201,7 @@
 
     <div class="mobile-preview" id="mobilePreview" aria-label="Live LED bar on mobile"><div><strong id="mobileSignal">Game artwork</strong><a href="#lab" id="mobileJump">View machine ↑</a></div><div class="mobile-leds" id="mobileLeds" aria-hidden="true"></div></div>
 
-    <footer><div><strong>SignalBar</strong><p>Made for the official Steam Machine. This page lets you explore it without installing the plugin. Sample game artwork belongs to its publishers.</p></div><div><a href="https://github.com/Albusquerque/SignalBar" target="_blank" rel="noopener noreferrer">Source code ↗</a><a href="https://github.com/Albusquerque/SignalBar/releases/latest" target="_blank" rel="noopener noreferrer">Download ↗</a></div></footer>
+    <footer><div><strong>GabeCubeAura 1.0.0</strong><p>Made for the official Steam Machine. This page lets you explore GabeCubeAura without installing the plugin. Sample game artwork belongs to its publishers.</p></div><div><a href="https://github.com/Albusquerque/GabeCubeAura" target="_blank" rel="noopener noreferrer">Source code ↗</a><a href="https://github.com/Albusquerque/GabeCubeAura/releases/latest" target="_blank" rel="noopener noreferrer">Download ↗</a></div></footer>
   </main>
 </body>
 </html>

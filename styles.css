@@ -26,3 +26,18 @@
 @media(max-width:560px){.hero-art{min-height:275px}.machine-scene{height:355px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.button,.scene-card,.logical-leds i{transition:none}}
 @media(min-width:561px){.tab-list{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}.tab{justify-content:center}}
+
+@media(min-width:561px){.tab-list{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* GabeCubeAura 1.0 additions: precise palettes and launch-artwork preview. */
+.precise-colours{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0}
+.precise-colours label{display:grid;grid-template-columns:34px minmax(0,1fr);gap:7px;align-items:center;padding:9px;background:#132630;border:1px solid #3d5b67;border-radius:7px}
+.precise-colours label>span{grid-column:1/-1;color:#a9bec6;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.precise-colours input[type="color"]{width:34px;height:31px;padding:2px;border:1px solid #5d7c85;border-radius:5px;background:#0f1d25}
+.precise-colours input[type="text"]{width:100%;min-width:0;height:31px;padding:0 7px;border:1px solid #496671;border-radius:5px;background:#0d1b23;color:#d5eeee;font:700 11px ui-monospace,SFMono-Regular,Consolas,monospace;text-transform:uppercase}
+.dominant-palette{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:12px 0 18px;min-height:33px}
+.dominant-palette span{min-height:33px;border:1px solid #ffffff2b;border-radius:6px;box-shadow:inset 0 0 18px #fff1,0 5px 14px #0003}
+.palette-status{margin:-8px 0 18px;color:var(--muted);font:700 11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}
+.timer-pill{display:inline-flex;align-items:center;justify-content:center;min-width:106px;padding:9px 12px;border:1px solid #4d7477;border-radius:999px;background:#183337;color:#a9eee4;font:800 11px ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.04em}
+.launch-preview{margin-top:17px}.launch-preview .art-image-wrap{aspect-ratio:16/7}.launch-preview .art-image-wrap img{width:100%;height:100%;object-fit:cover}
+@media(max-width:560px){.precise-colours{grid-template-columns:1fr}.dominant-palette{grid-template-columns:repeat(3,minmax(0,1fr))}.timer-pill{width:100%}}

@@ -1,4 +1,4 @@
-/* SignalBar Concept Lab: a browser-only visual simulator, not the plugin runtime. */
+/* GabeCubeAura Concept Lab: a browser-only visual simulator, not the plugin runtime. */
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 const OFF = [0, 0, 0];
@@ -17,6 +17,19 @@ const GAME_DATA = {
   balatro: { title: "Balatro", id: "2379780" },
 };
 const IMAGE_LABELS = { hero: "Library Hero", header: "Library Header", capsule: "Library Capsule" };
+// Browsers display local file:// images but forbid reading their pixels back from canvas.
+// These values are generated from the bundled samples and are only used for that security fallback.
+const SAMPLE_ARTWORK_PALETTES = {
+  "drg:hero": { 2: [[69, 48, 23], [198, 154, 86]], 3: [[56, 39, 18], [144, 104, 51], [236, 195, 118]] },
+  "drg:header": { 2: [[52, 60, 39], [162, 154, 91]], 3: [[50, 58, 38], [131, 157, 123], [217, 135, 16]] },
+  "drg:capsule": { 2: [[42, 57, 55], [165, 149, 94]], 3: [[42, 56, 54], [129, 169, 143], [203, 123, 33]] },
+  "witcher:hero": { 2: [[204, 226, 223], [94, 89, 93]], 3: [[219, 240, 236], [150, 168, 170], [82, 72, 76]] },
+  "witcher:header": { 2: [[202, 223, 219], [86, 77, 79]], 3: [[213, 234, 230], [148, 156, 156], [65, 54, 57]] },
+  "witcher:capsule": { 2: [[77, 62, 65], [206, 223, 218]], 3: [[56, 38, 43], [220, 241, 234], [134, 128, 127]] },
+  "balatro:hero": { 2: [[156, 62, 58], [29, 80, 118]], 3: [[50, 51, 61], [183, 69, 63], [33, 126, 199]] },
+  "balatro:header": { 2: [[56, 37, 44], [198, 191, 190]], 3: [[41, 40, 49], [197, 196, 196], [165, 22, 18]] },
+  "balatro:capsule": { 2: [[69, 64, 84], [186, 180, 190]], 3: [[66, 52, 64], [100, 122, 159], [214, 197, 197]] },
+};
 const PALETTES = {
   classic: ["#00b42d", "#f1ca25", "#e83b39"],
   thermal: ["#24c5e7", "#f2a724", "#e52239"],
@@ -63,13 +76,35 @@ const WEATHER_OPTIONS = {
   clear_day: ["Sun glints", "Solar bloom"],
   clear_night: ["Quiet constellation", "Silver hush"],
   rain: ["Bluewater", "Pearl rain"],
-  cloud: ["Passing shadow", "Passing shadows"],
+  cloud: ["Passing shadow", "Passing shadows", "Cross & gather", "Slow convergence"],
   breaks: ["Sun through clouds", "Sun, fading clouds"],
   breaks_night: ["Moon through clouds", "Moon, fading clouds"],
   snow: ["Melting snowfall", "Snow takes hold"],
   storm: ["Pulse and echoes", "Storm break"],
 };
 const WEATHER_ICONS = { clear_day: "☀", clear_night: "☾", rain: "☂", cloud: "☁", breaks: "⛅", breaks_night: "☾", snow: "❄", storm: "⚡" };
+const LAUNCH_PATTERNS = [
+  ["arpege-crossed", "Crossed arpeggio"], ["two-hands", "Two hands"],
+  ["legato", "Legato"], ["nocturne", "Nocturne"], ["crescendo", "Crescendo"],
+  ["color-wipe", "Color wipe"], ["scanner", "Scanner"],
+  ["theater-chase", "Theater chase"], ["twinkle", "Twinkle"], ["ripple", "Ripple"],
+];
+const CUSTOMIZATION_GROUPS = [
+  ["Steady", [["steady", "Steady · precise static colour"]]],
+  ...Object.entries(EVENT_OPTIONS).filter(([kind]) => kind !== "recording").map(([kind, variants]) =>
+    [`Light Events / ${kind[0].toUpperCase()}${kind.slice(1)}`, variants.map(([key, label]) => [`event:${key}`, label])]),
+  ...Object.entries(CONTROLLER_OPTIONS).map(([kind, variants]) =>
+    [`Controllers / ${kind[0].toUpperCase()}${kind.slice(1)}`, variants.map(([key, label]) => [`controller:${kind}:${key}`, label])]),
+  ...Object.entries(WEATHER_OPTIONS).map(([condition, variants]) =>
+    [`Weather / ${condition.replaceAll("_", " ")}`, variants.map((label, index) => [`weather:${condition}:${index}`, label])]),
+  ["Game Launches", LAUNCH_PATTERNS],
+];
+function freshLaunchProfiles() {
+  return Object.fromEntries(Object.keys(GAME_DATA).map((game) => [game, {
+    paletteMode: "artwork",
+    custom: { 2: ["#FFD000", "#00C8FF"], 3: ["#FFD000", "#00C8FF", "#FF3C9D"] },
+  }]));
+}
 
 function defaultState() {
   return {
@@ -92,15 +127,20 @@ function defaultState() {
     padHealthy: "#00b42d", padMedium: "#e66e00", padLow: "#dc0c18", padCharge: "#0091dc",
     weatherCondition: "clear_day", weatherVariants: { clear_day: 0, clear_night: 0, rain: 0, cloud: 1, breaks: 0, breaks_night: 0, snow: 1, storm: 0 },
     weatherWhere: "off", weatherTopbar: false, weatherUnit: "celsius", weatherBrightness: 70, weatherCutoff: 0, weatherStart: 0,
+    customPattern: "steady", customPaletteCount: 2, customColours: ["#FFD000", "#00C8FF", "#FF3C9D"], customBrightness: 128, customSpeed: 50, customDirection: "forward",
+    launchGame: "drg", launchSource: "hero", launchColourCount: 2, launchPattern: "arpege-crossed", launchDuration: 20,
+    launchProfiles: freshLaunchProfiles(), launchArtworkPalettes: {},
+    launchStarted: 0, launchPlaying: false,
     extraDark: 2, reversePhysical: true, overlay: null,
   };
 }
 let state = defaultState();
-let eventFrames = {};
-let weatherFrames = null;
+let eventFrames = globalThis.GABECUBEAURA_EVENT_FRAMES || {};
+let weatherFrames = globalThis.GABECUBEAURA_WEATHER_FRAMES || null;
 let clock = 0;
 let lastRealTime = performance.now();
 let artworkLoadToken = 0;
+let launchArtworkLoadToken = 0;
 let customObjectUrl = null;
 const ledElements = Array.from({ length: 17 }, () => {
   const led = document.createElement("i");
@@ -322,22 +362,163 @@ function eventFrame(overlay) {
   const title = Object.values(EVENT_OPTIONS).flat().find(([key]) => key === overlay.key)?.[1] || overlay.key;
   return { logical: frame, physical: frame, name: title, readout: `${Math.max(0, overlay.duration - elapsed).toFixed(1)} s`, explain: "This short light event takes the bar, then the live display underneath returns.", badge: "LIGHT EVENT" };
 }
-function activeContext(placement) { return placement === "everywhere" || (placement === "home" && state.context === "home"); }
+function addGlow(frame, position, width, colour, strength = 1) {
+  for (let index = 0; index < 17; index++) {
+    const weight = Math.max(0, 1 - Math.abs(index - position) / Math.max(.1, width)) * strength;
+    const candidate = scale(colour, weight);
+    if (Math.max(...candidate) > Math.max(...frame[index])) frame[index] = candidate;
+  }
+}
+function launchPatternFrame(pattern, palette, seconds, strength = 1) {
+  const frame = blank();
+  const colours = palette.length > 1 ? palette : [palette[0], palette[0]];
+  const phase = Math.max(0, seconds);
+  if (pattern === "arpege-crossed") {
+    const travel = (phase * 5.1) % 32, left = travel <= 16 ? travel : 32 - travel;
+    addGlow(frame, left, 3, colours[0], strength); addGlow(frame, 16 - left, 3, colours[1], strength);
+    if (colours[2]) addGlow(frame, 8 + Math.sin(phase * 2.2) * 5, 2.1, colours[2], strength * .72);
+  } else if (pattern === "two-hands") {
+    const radius = Math.abs(8 - ((phase * 4) % 16));
+    addGlow(frame, 8 - radius, 2.7, colours[0], strength); addGlow(frame, 8 + radius, 2.7, colours[1], strength);
+    if (colours[2]) addGlow(frame, 8, 2.5, colours[2], strength * (1 - radius / 8) * .85);
+  } else if (pattern === "legato") {
+    for (let index = 0; index < 17; index++) {
+      const wave = (Math.sin(index * .58 - phase * 2) + 1) / 2;
+      const base = Math.floor(phase / 2) % colours.length;
+      frame[index] = scale(colours[(base + (wave >= .5 ? 1 : 0)) % colours.length], strength * (.45 + .5 * wave));
+    }
+  } else if (pattern === "nocturne") {
+    const breath = .32 + .45 * (Math.sin(phase * 1.15 - Math.PI / 2) + 1) / 2;
+    for (let index = 0; index < 17; index++) frame[index] = scale(colours[index % colours.length], strength * breath * (.55 + .35 * Math.cos(index * .42) ** 2));
+    const spark = Math.floor(phase * 2.3) % 17;
+    addGlow(frame, spark, 1.4, colours[(spark + 1) % colours.length], strength * .75);
+  } else if (pattern === "crescendo") {
+    const cycle = (phase % 3.2) / 3.2, reach = cycle * 8.8;
+    for (let index = 0; index < 17; index++) {
+      const distance = Math.abs(index - 8);
+      if (distance <= reach) frame[index] = scale(colours[Math.min(colours.length - 1, Math.floor(distance / 8 * colours.length))], strength * (.45 + .55 * cycle));
+    }
+    addGlow(frame, 8 - reach, 1.7, colours[0], strength); addGlow(frame, 8 + reach, 1.7, colours[1], strength);
+  } else if (pattern === "color-wipe") {
+    const raw = phase * 7, head = Math.floor(raw % 23) - 3, colourIndex = Math.floor(raw / 23) % colours.length;
+    for (let index = 0; index < 17; index++) if (index <= head) frame[index] = scale(colours[colourIndex], strength * .82);
+    addGlow(frame, head, 2.4, colours[(colourIndex + 1) % colours.length], strength);
+  } else if (pattern === "scanner") {
+    const travel = (phase * 6.4) % 32, position = travel <= 16 ? travel : 32 - travel, colourIndex = Math.floor(phase / 2.5) % colours.length;
+    addGlow(frame, position, 3.2, colours[colourIndex], strength);
+    addGlow(frame, position - (travel <= 16 ? 2 : -2), 3.8, colours[(colourIndex + 1) % colours.length], strength * .32);
+  } else if (pattern === "theater-chase") {
+    const step = Math.floor(phase * 7.5);
+    for (let index = 0; index < 17; index++) {
+      if ((index + step) % 3 === 0) frame[index] = scale(colours[(Math.floor(index / 3) + Math.floor(step / 3)) % colours.length], strength);
+      else if ((index + step) % 3 === 1) frame[index] = scale(colours[(index + 1) % colours.length], strength * .18);
+    }
+  } else if (pattern === "twinkle") {
+    const tick = Math.floor(phase * 8);
+    for (let index = 0; index < 17; index++) {
+      const seed = (index * 73 + tick * 47 + (index + tick) * 19) % 101;
+      if (seed < 24) addGlow(frame, index, 1.25, colours[(index * 5 + tick) % colours.length], strength * (.4 + .6 * (1 - seed / 24)));
+    }
+  } else if (pattern === "ripple") {
+    [0, 1.1, 2.2].forEach((offset, colourIndex) => {
+      const age = ((phase - offset) % 3.3 + 3.3) % 3.3, radius = age / 3.3 * 9.5;
+      addGlow(frame, 8 - radius, 1.8, colours[colourIndex % colours.length], strength * (1 - age / 3.3));
+      addGlow(frame, 8 + radius, 1.8, colours[colourIndex % colours.length], strength * (1 - age / 3.3));
+    });
+  }
+  return frame;
+}
+function activeLaunchPalette() {
+  const profile = state.launchProfiles[state.launchGame];
+  const key = `${state.launchGame}:${state.launchSource}`;
+  const raw = profile.paletteMode === "custom"
+    ? profile.custom[state.launchColourCount]
+    : state.launchArtworkPalettes[key]?.[state.launchColourCount];
+  return Array.isArray(raw)
+    ? raw.map((colour) => typeof colour === "string" ? hexToRgb(colour) : colour)
+    : [];
+}
+function launchReadyFrame() {
+  const palette = activeLaunchPalette();
+  const frame = palette.length
+    ? Array.from({ length: 17 }, (_, index) => palette[Math.min(palette.length - 1, Math.floor(index * palette.length / 17))])
+    : blank();
+  const profile = state.launchProfiles[state.launchGame];
+  return {
+    logical: frame,
+    physical: frame,
+    name: palette.length ? `${GAME_DATA[state.launchGame].title} · launch palette ready` : `${GAME_DATA[state.launchGame].title} · analysing artwork`,
+    readout: palette.length
+      ? `${palette.length} ${profile.paletteMode === "custom" ? "custom" : "artwork"} colours · AppID ${GAME_DATA[state.launchGame].id}`
+      : `AppID ${GAME_DATA[state.launchGame].id}`,
+    explain: palette.length
+      ? "These are the exact colours the selected launch animation will use. Choose a pattern, then preview it."
+      : "The selected artwork is being decoded locally before the launch preview becomes available.",
+    badge: palette.length ? "LAUNCH READY" : "ANALYSING",
+  };
+}
+function launchFrame() {
+  const elapsed = Math.max(0, (clock - state.launchStarted) / 1000);
+  if (!state.launchPlaying || elapsed >= state.launchDuration) {
+    state.launchPlaying = false;
+    return launchReadyFrame();
+  }
+  const envelope = Math.min(1, elapsed / .45, Math.max(0, state.launchDuration - elapsed) / .65);
+  const frame = launchPatternFrame(state.launchPattern, activeLaunchPalette(), elapsed, envelope);
+  const label = LAUNCH_PATTERNS.find(([key]) => key === state.launchPattern)?.[1] || state.launchPattern;
+  return { logical: frame, physical: frame, name: `${GAME_DATA[state.launchGame].title} · ${label}`, readout: `${Math.ceil(state.launchDuration - elapsed)} s · AppID ${GAME_DATA[state.launchGame].id}`, explain: "A temporary launch layer uses only the selected two or three hues, plus darker values towards black. The permanent display returns afterwards.", badge: "GAME LAUNCH" };
+}
+function recolourFrame(raw, palette, brightness, phase) {
+  return raw.map((pixel, index) => {
+    const level = Math.max(...pixel);
+    return level <= 0 ? [...OFF] : scale(palette[(index + Math.floor(phase * .7)) % palette.length], brightness / 255 * level / 255);
+  });
+}
+function customizationFrame() {
+  const pattern = state.customPattern;
+  const palette = state.customColours.slice(0, state.customPaletteCount).map(hexToRgb);
+  const phase = clock / 1000 * (.2 + state.customSpeed * .028);
+  let frame;
+  if (pattern === "steady") frame = Array.from({ length: 17 }, () => scale(palette[0], state.customBrightness / 255));
+  else if (pattern.startsWith("event:")) {
+    const key = pattern.slice(6), data = eventFrames[key];
+    const raw = data?.frames?.[Math.floor(phase * data.fps) % data.frames.length] || blank();
+    frame = recolourFrame(raw, palette, state.customBrightness, phase);
+  } else if (pattern.startsWith("controller:")) {
+    const [, kind, variant] = pattern.split(":");
+    const raw = controllerPreviewFrame({ kind, variant, start: clock - (phase % 3.2) * 1000, duration: 99 }).logical;
+    frame = recolourFrame(raw, palette, state.customBrightness, phase);
+  } else if (pattern.startsWith("weather:")) {
+    const [, condition, rawVariant] = pattern.split(":"), variant = Number(rawVariant);
+    const loop = weatherFrames?.frames?.[condition]?.[variant];
+    const raw = loop?.[Math.floor(phase * weatherFrames.fps) % loop.length] || blank();
+    frame = recolourFrame(raw, palette, state.customBrightness, phase);
+  } else frame = launchPatternFrame(pattern, palette, phase, state.customBrightness / 255);
+  if (state.customDirection === "reverse") frame.reverse();
+  const label = [...CUSTOMIZATION_GROUPS.flatMap(([, choices]) => choices)].find(([key]) => key === pattern)?.[1] || pattern;
+  return { logical: frame, physical: frame, name: `Customization+ · ${label}`, readout: `${state.customPaletteCount} colour${state.customPaletteCount === 1 ? "" : "s"} · ${state.customBrightness}/255 · speed ${state.customSpeed}`, explain: "A permanent GabeCubeAura display. Short alerts, launch animations and countdowns can temporarily take priority, then this scene returns.", badge: "CUSTOMIZATION+" };
+}
+ function activeContext(placement) { return placement === "everywhere" || (placement === "home" && state.context === "home"); }
 function getCurrentOutput() {
-  if (state.display === "disabled") return { logical: blank(), physical: blank(), name: "SignalBar disabled", readout: "Valve controls the bar", explain: "Disabled stops every SignalBar effect. The site's bar is dark because it cannot simulate Valve's own signal.", badge: "DISABLED" };
+  const countdownActive = state.timerRunning && state.timerRemaining > 0 && (state.timerSource !== "families" || state.context === "game");
+  if (countdownActive && state.timerRemaining <= 300) return countdownFrame();
   if (state.overlay && (clock - state.overlay.start) / 1000 < state.overlay.duration) {
     return state.overlay.type === "event" ? eventFrame(state.overlay) : controllerPreviewFrame(state.overlay);
   }
   if (state.overlay) state.overlay = null;
-  if (state.timerRunning && state.timerRemaining > 0 && (state.timerSource !== "families" || state.context === "game")) return countdownFrame();
+  if (state.launchPlaying) return launchFrame();
+  if (countdownActive) return countdownFrame();
+  if (state.tab === "launches") return launchReadyFrame();
+  if (state.display === "disabled") return { logical: blank(), physical: blank(), name: "GabeCubeAura Off", readout: "Steam keeps the bar", explain: "No permanent GabeCubeAura display is selected here. Temporary GabeCubeAura layers can still appear; the master switch in the real plugin is the control that stops everything.", badge: "GABECUBEAURA OFF" };
   const chargeContext = state.chargeMode === "continuous-everywhere" || (state.chargeMode === "continuous-home" && state.context === "home");
   const persistentContext = activeContext(state.controllerWhere);
   if ((state.padCharging && chargeContext && (state.padCount === 2 ? state.padTwo : state.padOne) < 100) || persistentContext) return controllerFrame();
   if (state.weatherWhere === "everywhere" || state.weatherWhere === state.context) return weatherFrame();
   let output;
-  if (state.display === "performance" && (state.context === "game" || state.perfHome)) output = performanceFrames();
+  if (state.display === "customization") output = customizationFrame();
+  else if (state.display === "performance" && (state.context === "game" || state.perfHome)) output = performanceFrames();
   else if (state.display === "artwork" && state.context === "game") output = artworkFrame();
-  else output = { logical: blank(), physical: blank(), name: "Steam Home", readout: "No base display here", explain: "Choose Performance on Home or the controller gauge to keep a signal here.", badge: "IDLE" };
+  else output = { logical: blank(), physical: blank(), name: "GabeCubeAura Off", readout: "Steam keeps the bar", explain: "Choose a permanent display for this context, or leave GabeCubeAura Off to keep Steam's own light-bar behaviour.", badge: "GABECUBEAURA OFF" };
   if (state.recording && (output.badge === "PERFORMANCE" || output.badge === "ARTWORK")) {
     output.logical = output.logical.map((color) => [...color]);
     output.physical = output.physical.map((color) => [...color]);
@@ -381,11 +562,13 @@ function drawPhysical(frame) {
   ctx.fillStyle = diffuser;
   ctx.fillRect(0, centreY - height * .045, width, height * .09);
 }
-function renderStage() {
+ function renderStage() {
   const output = getCurrentOutput();
   ledElements.forEach((element, index) => {
     const color = output.logical[index] || OFF;
     element.style.background = isLit(color) ? rgbToHex(color) : "#33454e";
+    const glow = "";
+    element.style.boxShadow = glow;
     mobileLedElements[index].style.background = element.style.background;
   });
   $("#logicalLeds").setAttribute("aria-label", `${output.name}: ${output.logical.filter(isLit).length} of 17 logical LEDs lit`);
@@ -395,8 +578,15 @@ function renderStage() {
   $("#stageExplain").textContent = output.explain;
   $("#providerBadge").textContent = output.badge;
   $("#mobileSignal").textContent = output.name;
-  $("#contextLabel").textContent = state.context === "home" ? "STEAM HOME" : `IN GAME · ${GAME_DATA[state.game].title}`;
+  const stagedGame = state.tab === "launches" ? state.launchGame : state.game;
+  $("#contextLabel").textContent = state.context === "home" ? "STEAM HOME" : `IN GAME · ${GAME_DATA[stagedGame].title}`;
+  $("#contextSwitch").disabled = false;
   $("#contextSwitch").textContent = state.context === "home" ? "Go in game ↔" : "Go Home ↔";
+  if (state.tab === "launches") {
+    const remaining = Math.max(0, state.launchDuration - (clock - state.launchStarted) / 1000);
+    const paletteReady = activeLaunchPalette().length === state.launchColourCount;
+    $("#launchStatus").textContent = state.launchPlaying ? `Playing · ${Math.ceil(remaining)} s` : paletteReady ? `Ready · ${state.launchDuration} s` : "Waiting for colours";
+  }
 }
 function tick(realNow) {
   const elapsed = clamp(realNow - lastRealTime, 0, 100);
@@ -455,7 +645,9 @@ function sampleArtwork(image) {
   const context = canvas.getContext("2d", { willReadFrequently: true });
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   const y = clamp(Math.round((canvas.height - 1) * getSampleRow() / 100), 0, canvas.height - 1);
-  const data = context.getImageData(0, y, canvas.width, 1).data;
+  let data;
+  try { data = context.getImageData(0, y, canvas.width, 1).data; }
+  catch { updateSampleLine(); return; }
   state.artworkColors = Array.from({ length: 17 }, (_, index) => {
     const start = Math.floor(index * canvas.width / 17), end = Math.max(start + 1, Math.floor((index + 1) * canvas.width / 17));
     const sum = [0, 0, 0];
@@ -469,7 +661,9 @@ function findAutoRow(image) {
   canvas.width = 170; canvas.height = 100;
   const context = canvas.getContext("2d", { willReadFrequently: true });
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  let data;
+  try { data = context.getImageData(0, 0, canvas.width, canvas.height).data; }
+  catch { state.autoRow = state.gameSettings[state.game]?.row ?? 59; return; }
   let best = { row: 59, score: -1 };
   for (let row = 18; row <= 82; row += 4) {
     let saturation = 0, contrast = 0;
@@ -498,16 +692,134 @@ function loadArtwork() {
   if (image.src !== new URL(source, location.href).href) image.src = source;
   else if (image.complete) { findAutoRow(image); sampleArtwork(image); }
 }
+function dominantArtworkColours(image, count, fallbackKey) {
+  const canvas = document.createElement("canvas"), context = canvas.getContext("2d", { willReadFrequently: true });
+  const ratio = Math.min(1, 120 / Math.max(image.naturalWidth, image.naturalHeight));
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * ratio));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * ratio));
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  let data;
+  try { data = context.getImageData(0, 0, canvas.width, canvas.height).data; }
+  catch { return SAMPLE_ARTWORK_PALETTES[fallbackKey]?.[count]?.map((colour) => [...colour]) || []; }
+  const samples = [];
+  for (let offset = 0; offset < data.length; offset += 16) {
+    const color = [data[offset], data[offset + 1], data[offset + 2]], max = Math.max(...color), min = Math.min(...color);
+    if (data[offset + 3] > 200 && max > 18 && !(min > 238 && max - min < 9)) samples.push(color);
+  }
+  if (!samples.length) return Array.from({ length: count }, () => [120, 120, 120]);
+  const vividness = (color) => Math.max(...color) - Math.min(...color) + Math.max(...color) * .14;
+  const centres = [samples.reduce((best, color) => vividness(color) > vividness(best) ? color : best, samples[0])];
+  while (centres.length < count) centres.push(samples.reduce((best, color) => {
+    const distance = (candidate) => Math.min(...centres.map((centre) => centre.reduce((sum, channel, index) => sum + (channel - candidate[index]) ** 2, 0)));
+    return distance(color) * (.5 + vividness(color) / 255) > distance(best) * (.5 + vividness(best) / 255) ? color : best;
+  }, samples[0]));
+  let groups = [];
+  for (let pass = 0; pass < 8; pass++) {
+    groups = Array.from({ length: count }, () => []);
+    samples.forEach((color) => {
+      const index = centres.map((centre) => centre.reduce((sum, channel, channelIndex) => sum + (channel - color[channelIndex]) ** 2, 0))
+        .reduce((best, value, index, values) => value < values[best] ? index : best, 0);
+      groups[index].push(color);
+    });
+    groups.forEach((group, index) => {
+      if (group.length) centres[index] = [0, 1, 2].map((channel) => Math.round(group.reduce((sum, color) => sum + color[channel], 0) / group.length));
+    });
+  }
+  return centres.map((colour, index) => ({ colour, size: groups[index].length }))
+    .sort((a, b) => b.size - a.size).map(({ colour }) => colour);
+}
+function loadLaunchArtwork() {
+  const image = $("#launchArtImage");
+  const game = state.launchGame, artworkSource = state.launchSource;
+  const source = `assets/${game}-${artworkSource}.jpg`, key = `${game}:${artworkSource}`;
+  const token = ++launchArtworkLoadToken;
+  $("#launchPaletteStatus").textContent = `Analysing ${IMAGE_LABELS[artworkSource]} for ${GAME_DATA[game].title}…`;
+  if (!state.launchArtworkPalettes[key]) {
+    $("#launchPalette").replaceChildren();
+    $("#launchPalette").dataset.paletteKey = "";
+    if (state.launchProfiles[game].paletteMode === "artwork") $("#launchPreview").disabled = true;
+  }
+  image.onload = () => {
+    const palettes = { 2: dominantArtworkColours(image, 2, key), 3: dominantArtworkColours(image, 3, key) };
+    state.launchArtworkPalettes[key] = palettes;
+    if (token === launchArtworkLoadToken && game === state.launchGame && artworkSource === state.launchSource) syncLaunchUI();
+  };
+  image.onerror = () => {
+    if (token !== launchArtworkLoadToken) return;
+    $("#launchArtType").textContent = "Artwork unavailable";
+    $("#launchPaletteStatus").textContent = "No colours available for this artwork source.";
+    $("#launchPreview").disabled = state.launchProfiles[state.launchGame].paletteMode === "artwork";
+  };
+  if (image.src !== new URL(source, location.href).href) image.src = source;
+  else if (image.complete) image.onload();
+  $("#launchArtTitle").textContent = `${GAME_DATA[game].title} · AppID ${GAME_DATA[game].id}`;
+}
+function renderPalette(target, colours) {
+  target.replaceChildren(...colours.map((colour, index) => {
+    const item = document.createElement("span"), rgb = typeof colour === "string" ? hexToRgb(colour) : colour;
+    item.style.background = rgbToHex(rgb); item.title = `Colour ${index + 1} · ${rgbToHex(rgb).toUpperCase()} · RGB ${rgb.join(", ")}`;
+    return item;
+  }));
+}
+function syncCustomizationUI() {
+  const select = $("#customPattern");
+  if (!select.options.length) select.replaceChildren(...CUSTOMIZATION_GROUPS.map(([label, choices]) => {
+    const group = document.createElement("optgroup"); group.label = label;
+    group.append(...choices.map(([value, text]) => new Option(text, value)));
+    return group;
+  }));
+  select.value = state.customPattern;
+  $("#customPaletteCount").value = String(state.customPaletteCount);
+  $("#customDirection").value = state.customDirection;
+  state.customColours.forEach((colour, index) => {
+    $(`#customColour${index + 1}`).value = colour.toLowerCase();
+    $(`#customHex${index + 1}`).value = colour.toUpperCase();
+  });
+  for (const index of [2, 3]) $(`[data-custom-colour="${index}"]`).hidden = state.customPaletteCount < index;
+  const steady = state.customPattern === "steady";
+  $("#customSpeed").disabled = steady;
+  $("#customDirection").disabled = steady;
+}
+function syncLaunchUI() {
+  const profile = state.launchProfiles[state.launchGame], count = state.launchColourCount;
+  $("#launchSource").value = state.launchSource;
+  $("#launchPaletteMode").value = profile.paletteMode;
+  $("#launchColourCount").value = String(count);
+  $("#launchPattern").value = state.launchPattern;
+  $("#launchCustomColours").hidden = profile.paletteMode !== "custom";
+  $("[data-launch-colour=\"3\"]").hidden = count < 3;
+  profile.custom[count].forEach((colour, index) => {
+    $(`#launchColour${index + 1}`).value = colour.toLowerCase();
+    $(`#launchHex${index + 1}`).value = colour.toUpperCase();
+  });
+  $("#launchArtTitle").textContent = `${GAME_DATA[state.launchGame].title} · AppID ${GAME_DATA[state.launchGame].id}`;
+  $("#launchArtType").textContent = `${IMAGE_LABELS[state.launchSource]} · ${profile.paletteMode === "custom" ? "custom AppID palette" : "artwork palette"}`;
+  const palette = activeLaunchPalette(), ready = palette.length === count;
+  renderPalette($("#launchPalette"), palette);
+  $("#launchPalette").dataset.paletteKey = ready ? `${state.launchGame}:${state.launchSource}:${profile.paletteMode}:${count}` : "";
+  $("#launchPaletteStatus").textContent = ready
+    ? `${profile.paletteMode === "custom" ? "Saved for this AppID" : "Extracted locally"}: ${palette.map((colour) => rgbToHex(colour).toUpperCase()).join(" · ")}`
+    : `Analysing ${IMAGE_LABELS[state.launchSource]} for ${GAME_DATA[state.launchGame].title}…`;
+  $("#launchPreview").disabled = !ready;
+  $$('[data-launch-game]').forEach((button) => button.classList.toggle("selected", button.dataset.launchGame === state.launchGame));
+}
+function startLaunchPreview() {
+  if (activeLaunchPalette().length !== state.launchColourCount) return;
+  state.launchStarted = clock; state.launchPlaying = true; state.context = "game"; state.overlay = null; state.timerRunning = false;
+  $("#contextChoice").value = "game";
+}
 function setTab(tab, configure = true) {
   state.tab = tab;
   $$(".tab").forEach((button) => { const active = button.dataset.tab === tab; button.classList.toggle("active", active); button.setAttribute("aria-selected", String(active)); });
   $$(".pane").forEach((pane) => pane.classList.toggle("active", pane.dataset.pane === tab));
   if (configure) {
     state.overlay = null;
-    if (tab === "artwork") { state.display = state.gameSettings[state.game].display === "performance" ? "performance" : "artwork"; state.context = "game"; state.timerRunning = false; }
+    if (tab === "customization") { state.display = "customization"; state.context = "home"; state.timerRunning = false; state.launchPlaying = false; state.controllerWhere = "off"; state.weatherWhere = "off"; state.padCharging = false; $("#controllerWhere").value = "off"; $("#weatherWhere").value = "off"; $("#padCharging").checked = false; }
+    if (tab === "artwork") { const chosen = state.gameSettings[state.game].display; state.display = chosen === "inherit" ? "artwork" : chosen; state.context = "game"; state.timerRunning = false; state.launchPlaying = false; }
     if (tab === "performance") { state.display = "performance"; state.context = "game"; state.timerRunning = false; }
+    if (tab === "launches") { state.display = "artwork"; state.context = "game"; state.timerRunning = false; state.launchPlaying = false; syncLaunchUI(); }
     if (tab === "playtime") { state.display = "performance"; state.context = "game"; state.timerRunning = true; }
-    if (tab === "controllers") { state.display = "performance"; state.context = "home"; state.timerRunning = false; state.padCharging = false; state.weatherWhere = "off"; $("#weatherWhere").value = "off"; $("#padCharging").checked = false; }
+    if (tab === "controllers") { state.display = "performance"; state.context = "home"; state.timerRunning = false; state.padCharging = false; state.controllerWhere = "home"; state.weatherWhere = "off"; $("#controllerWhere").value = "home"; $("#weatherWhere").value = "off"; $("#padCharging").checked = false; }
     if (tab === "weather") { state.display = "performance"; state.context = "home"; state.timerRunning = false; state.padCharging = false; state.controllerWhere = "off"; state.weatherWhere = "home"; state.weatherStart = clock; $("#controllerWhere").value = "off"; $("#weatherWhere").value = "home"; $("#padCharging").checked = false; }
     if (tab === "events") { state.display = "performance"; state.context = "game"; state.timerRunning = false; playEvent(); }
     $("#contextChoice").value = state.context;
@@ -516,8 +828,10 @@ function setTab(tab, configure = true) {
   requestAnimationFrame(updateSampleLine);
 }
 function choosePreset(preset) {
+  if (preset === "customization") setTab("customization");
   if (preset === "artwork") setTab("artwork");
   if (preset === "performance") setTab("performance");
+  if (preset === "launches") { setTab("launches"); startLaunchPreview(); }
   if (preset === "playtime") setTab("playtime");
   if (preset === "controllers") setTab("controllers");
   if (preset === "weather") setTab("weather");
@@ -544,7 +858,6 @@ function syncEventUI() {
   $("#eventPlay").textContent = state.eventKind === "recording" ? "Replay cue" : "Play this signal";
 }
 function playEvent(key = state.eventVariants[state.eventKind]) {
-  if (state.display === "disabled") state.display = "performance";
   const duration = eventFrames[key]?.duration || 2.5;
   state.overlay = { type: "event", key, start: clock, duration };
 }
@@ -568,7 +881,7 @@ function playController() {
   state.overlay = { type: "controller", kind, variant: state.controllerVariants[kind], start: clock, duration: kind === "duo" ? 5.6 : kind === "gauge" ? 3 : 3.2 };
 }
 function updateOutputs() {
-  const outputs = { artRow: `${getSampleRow()}%`, cpuLoad: `${state.cpu}%`, cpuTemp: `${state.cpuTemp}°C`, gpuLoad: `${state.gpu}%`, gpuTemp: `${state.gpuTemp}°C`, coolTemp: `${state.coolTemp}°C`, hotTemp: `${state.hotTemp}°C`, timerRemaining: formatTime(state.timerRemaining), padOne: `${state.padOne}%`, padTwo: `${state.padTwo}%`, lowThreshold: `${state.lowThreshold}%`, padBrightness: `${state.padBrightness}%`, weatherBrightness: `${state.weatherBrightness}%`, weatherCutoff: String(state.weatherCutoff), extraDark: String(state.extraDark) };
+  const outputs = { customBrightness: `${state.customBrightness} / 255`, customSpeed: `${state.customSpeed} / 100`, launchDuration: `${state.launchDuration} s`, artRow: `${getSampleRow()}%`, cpuLoad: `${state.cpu}%`, cpuTemp: `${state.cpuTemp}°C`, gpuLoad: `${state.gpu}%`, gpuTemp: `${state.gpuTemp}°C`, coolTemp: `${state.coolTemp}°C`, hotTemp: `${state.hotTemp}°C`, timerRemaining: formatTime(state.timerRemaining), padOne: `${state.padOne}%`, padTwo: `${state.padTwo}%`, lowThreshold: `${state.lowThreshold}%`, padBrightness: `${state.padBrightness}%`, weatherBrightness: `${state.weatherBrightness}%`, weatherCutoff: String(state.weatherCutoff), extraDark: String(state.extraDark) };
   Object.entries(outputs).forEach(([key, value]) => { const element = $(`#${key}Value`); if (element) element.textContent = value; });
 }
 function bindValue(id, stateKey, transform = (value) => value, callback) {
@@ -579,9 +892,44 @@ function bindValue(id, stateKey, transform = (value) => value, callback) {
     updateOutputs();
   });
 }
+function normaliseHex(value) {
+  const raw = String(value).trim().toUpperCase();
+  return /^#[0-9A-F]{6}$/.test(raw) ? raw : null;
+}
 function bindControls() {
   $$(".tab").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.tab)));
   $$("[data-preset]").forEach((button) => button.addEventListener("click", () => choosePreset(button.dataset.preset)));
+  $("#customPattern").addEventListener("change", (event) => { state.customPattern = event.target.value; syncCustomizationUI(); });
+  $("#customPaletteCount").addEventListener("change", (event) => { state.customPaletteCount = Number(event.target.value); syncCustomizationUI(); });
+  $("#customDirection").addEventListener("change", (event) => { state.customDirection = event.target.value; });
+  bindValue("customBrightness", "customBrightness", Number);
+  bindValue("customSpeed", "customSpeed", Number);
+  for (let index = 0; index < 3; index++) {
+    const picker = $(`#customColour${index + 1}`), hex = $(`#customHex${index + 1}`);
+    picker.addEventListener("input", () => { state.customColours[index] = picker.value.toUpperCase(); hex.value = state.customColours[index]; });
+    hex.addEventListener("input", () => { const value = normaliseHex(hex.value); if (value) { state.customColours[index] = value; picker.value = value.toLowerCase(); } });
+    hex.addEventListener("blur", () => { hex.value = state.customColours[index]; });
+  }
+  $("#customPreview").addEventListener("click", () => { state.display = "customization"; state.context = "home"; state.overlay = null; state.timerRunning = false; state.controllerWhere = "off"; state.weatherWhere = "off"; state.padCharging = false; $("#contextChoice").value = "home"; $("#displayChoice").value = "customization"; $("#controllerWhere").value = "off"; $("#weatherWhere").value = "off"; $("#padCharging").checked = false; });
+  $$("[data-launch-game]").forEach((button) => button.addEventListener("click", () => {
+    state.launchGame = button.dataset.launchGame; state.launchPlaying = false; syncLaunchUI(); loadLaunchArtwork();
+  }));
+  $("#launchSource").addEventListener("change", (event) => { state.launchSource = event.target.value; state.launchPlaying = false; loadLaunchArtwork(); });
+  $("#launchPaletteMode").addEventListener("change", (event) => { state.launchProfiles[state.launchGame].paletteMode = event.target.value; syncLaunchUI(); });
+  $("#launchColourCount").addEventListener("change", (event) => { state.launchColourCount = Number(event.target.value); syncLaunchUI(); });
+  $("#launchPattern").addEventListener("change", (event) => { state.launchPattern = event.target.value; });
+  bindValue("launchDuration", "launchDuration", Number);
+  for (let index = 0; index < 3; index++) {
+    const picker = $(`#launchColour${index + 1}`), hex = $(`#launchHex${index + 1}`);
+    const setLaunchColour = (value) => {
+      state.launchProfiles[state.launchGame].custom[state.launchColourCount][index] = value;
+      picker.value = value.toLowerCase(); hex.value = value; syncLaunchUI();
+    };
+    picker.addEventListener("input", () => setLaunchColour(picker.value.toUpperCase()));
+    hex.addEventListener("input", () => { const value = normaliseHex(hex.value); if (value) setLaunchColour(value); });
+    hex.addEventListener("blur", () => { hex.value = state.launchProfiles[state.launchGame].custom[state.launchColourCount][index] || "#000000"; });
+  }
+  $("#launchPreview").addEventListener("click", startLaunchPreview);
   $$("[data-game]").forEach((button) => button.addEventListener("click", () => {
     saveGameArtworkChoice();
     state.game = button.dataset.game;
@@ -589,7 +937,7 @@ function bindControls() {
     if (customObjectUrl) { URL.revokeObjectURL(customObjectUrl); customObjectUrl = null; }
     const settings = state.gameSettings[state.game];
     state.artSource = settings.source; state.artMode = settings.mode; state.artRow = settings.row;
-    state.display = settings.display === "performance" ? "performance" : "artwork";
+    state.display = settings.display === "inherit" ? "artwork" : settings.display;
     $("#artSource").value = state.artSource; $("#artMode").value = state.artMode;
     $("#artRow").value = String(state.artRow); $("#artRow").disabled = state.artMode !== "manual";
     $("#gameDisplay").value = settings.display;
@@ -602,7 +950,7 @@ function bindControls() {
   bindValue("artRow", "artRow", Number, () => { saveGameArtworkChoice(); sampleArtwork($("#artImage")); });
   $("#gameDisplay").addEventListener("change", (event) => {
     state.gameSettings[state.game].display = event.target.value;
-    state.display = event.target.value === "performance" ? "performance" : "artwork";
+    state.display = event.target.value === "inherit" ? "artwork" : event.target.value;
     $("#displayChoice").value = state.display;
   });
   $("#artUpload").addEventListener("change", (event) => {
@@ -668,7 +1016,7 @@ function resetDemo() {
   state = defaultState();
   clock = 0;
   if (customObjectUrl) { URL.revokeObjectURL(customObjectUrl); customObjectUrl = null; }
-  for (const [id, value] of Object.entries({ artSource: state.artSource, artMode: state.artMode, artRow: state.artRow, gameDisplay: "inherit", perfMetric: state.metric, perfDirection: state.direction, cpuLoad: state.cpu, cpuTemp: state.cpuTemp, gpuLoad: state.gpu, gpuTemp: state.gpuTemp, perfPalette: state.palette, perfResponse: state.response, coolColor: state.coolColor, middleColor: state.middleColor, hotColor: state.hotColor, coolTemp: state.coolTemp, hotTemp: state.hotTemp, timerDuration: state.timerDuration, timerScale: state.timerScale, timerRemaining: state.timerRemaining, timerColor: state.timerColor, timerSpeed: state.timerSpeed, controllerCount: state.padCount, padOne: state.padOne, padTwo: state.padTwo, controllerWhere: state.controllerWhere, chargeMode: state.chargeMode, alertWhere: state.alertWhere, lowThreshold: state.lowThreshold, padBrightness: state.padBrightness, padHealthy: state.padHealthy, padMedium: state.padMedium, padLow: state.padLow, padCharge: state.padCharge, weatherCondition: state.weatherCondition, weatherWhere: state.weatherWhere, weatherUnit: state.weatherUnit, weatherBrightness: state.weatherBrightness, weatherCutoff: state.weatherCutoff, extraDark: state.extraDark, contextChoice: state.context, displayChoice: state.display })) { const element = $(`#${id}`); if (element) element.value = String(value); }
+  for (const [id, value] of Object.entries({ customBrightness: state.customBrightness, customSpeed: state.customSpeed, launchDuration: state.launchDuration, artSource: state.artSource, artMode: state.artMode, artRow: state.artRow, gameDisplay: "inherit", perfMetric: state.metric, perfDirection: state.direction, cpuLoad: state.cpu, cpuTemp: state.cpuTemp, gpuLoad: state.gpu, gpuTemp: state.gpuTemp, perfPalette: state.palette, perfResponse: state.response, coolColor: state.coolColor, middleColor: state.middleColor, hotColor: state.hotColor, coolTemp: state.coolTemp, hotTemp: state.hotTemp, timerDuration: state.timerDuration, timerScale: state.timerScale, timerRemaining: state.timerRemaining, timerColor: state.timerColor, timerSpeed: state.timerSpeed, controllerCount: state.padCount, padOne: state.padOne, padTwo: state.padTwo, controllerWhere: state.controllerWhere, chargeMode: state.chargeMode, alertWhere: state.alertWhere, lowThreshold: state.lowThreshold, padBrightness: state.padBrightness, padHealthy: state.padHealthy, padMedium: state.padMedium, padLow: state.padLow, padCharge: state.padCharge, weatherCondition: state.weatherCondition, weatherWhere: state.weatherWhere, weatherUnit: state.weatherUnit, weatherBrightness: state.weatherBrightness, weatherCutoff: state.weatherCutoff, extraDark: state.extraDark, contextChoice: state.context, displayChoice: state.display })) { const element = $(`#${id}`); if (element) element.value = String(value); }
   $("#timerRemaining").max = String(state.timerDuration * 60);
   for (const [id, checked] of Object.entries({ perfHome: state.perfHome, recordIsolation: state.recordIsolation, padCharging: state.padCharging, weatherTopbar: state.weatherTopbar, reversePhysical: state.reversePhysical })) $(`#${id}`).checked = checked;
   $$("[data-game]").forEach((button) => button.classList.toggle("selected", button.dataset.game === state.game));
@@ -677,16 +1025,14 @@ function resetDemo() {
   $("#customColours").hidden = true;
   $("#artRow").disabled = false;
   $("#pauseDemo").textContent = "Ⅱ";
-  syncEventUI(); syncControllerUI(); syncWeatherUI(); updateOutputs(); loadArtwork(); setTab("overview", false);
+  syncEventUI(); syncControllerUI(); syncWeatherUI(); syncCustomizationUI(); syncLaunchUI(); updateOutputs(); loadArtwork(); loadLaunchArtwork(); setTab("overview", false);
 }
-async function init() {
+function init() {
+  $("#launchPattern").replaceChildren(...LAUNCH_PATTERNS.map(([value, label]) => new Option(label, value)));
+  syncCustomizationUI(); syncLaunchUI(); loadLaunchArtwork();
   bindControls();
   syncEventUI(); syncControllerUI(); syncWeatherUI(); updateOutputs(); loadArtwork();
   updateMobilePreviewVisibility();
-  try { const response = await fetch("event-frames.json"); if (response.ok) eventFrames = await response.json(); }
-  catch { /* The base modes still work if event data is unavailable. */ }
-  try { const response = await fetch("weather-frames.json"); if (response.ok) weatherFrames = await response.json(); }
-  catch { /* Other simulations still work without weather frames. */ }
   requestAnimationFrame(tick);
 }
 init();
