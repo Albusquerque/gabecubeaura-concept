@@ -24,8 +24,12 @@ try {
   page.on("request", (request) => { if (request.url().endsWith("-frames.json")) jsonRequests.push(request.url()); });
   await page.goto(url, { waitUntil: "networkidle" });
   assert.match(await page.title(), /GabeCubeAura Concept Lab/);
-  assert.match(await page.locator("body").innerText(), /GabeCubeAura 1\.0\.0 product preview/);
-  assert.doesNotMatch((await page.locator("body").innerText()).toLowerCase(), /1\.0\.0-beta/);
+  assert.match(await page.locator("body").innerText(), /GabeCubeAura 1\.2\.0 beta preview/);
+  assert.equal(await page.locator('[data-pane="witcher"] .eyebrow').textContent(), "APPID 292030 · EXPERIMENTAL");
+  assert.equal(await page.locator('link[rel="canonical"]').getAttribute("href"), "https://alyenax.github.io/gabecubeaura-concept/");
+  const publicLinks = await page.locator('a[href*="github.com/"]').evaluateAll((links) => links.map((link) => link.href));
+  assert.ok(publicLinks.length >= 4);
+  assert.equal(publicLinks.every((href) => href.includes("github.com/Alyenax/GabeCubeAura")), true);
   for (const selector of [".hero-cube", ".steam-machine"]) {
     const ratio = await page.locator(selector).evaluate((element) => element.offsetWidth / element.offsetHeight);
     assert.ok(Math.abs(ratio - 156 / 152) < 0.015, `${selector} front ratio: ${ratio}`);
@@ -172,16 +176,111 @@ try {
   await page.locator('[data-tab="controllers"]').click();
   await page.waitForFunction(() => document.querySelector("#providerBadge")?.textContent === "CONTROLLERS");
   assert.equal(await page.locator("#providerBadge").textContent(), "CONTROLLERS");
-  await page.locator(".workbench").screenshot({ path: "/tmp/gabecubeaura-concept-controllers.png" });
-  await page.locator("#controllerScene").selectOption("low");
+  await page.locator("#controllerCount").selectOption("4");
+
+  assert.equal(await page.locator('[data-controller-row="3"]').isVisible(), true);
+  assert.equal(await page.locator('[data-controller-row="4"]').isVisible(), true);
+  assert.equal(await page.locator("#controllerTarget option").count(), 4);
+  assert.equal(await page.locator('#controllerScene option[value="duo"]').textContent(), "Four Seats");
+  assert.equal(await page.locator('[data-controller-colour-mode="battery"]').getAttribute("aria-pressed"), "true");
+  assert.equal(await page.locator("#controllerBatteryColours").isVisible(), true);
+  assert.equal(await page.locator("#controllerPlayerColours").isHidden(), true);
+  await page.locator("#controllerScene").selectOption("duo");
+  await page.locator("#controllerVariant").selectOption("double-welcome");
+  await page.locator("#controllerPlay").click();
+  await page.waitForFunction(() => document.querySelector("#signalName")?.textContent?.includes("Four Seats"));
+  assert.match(await page.locator("#signalReadout").textContent(), /P1 96% · P2 41% · P3 73% · P4 28%/);
+  assert.equal(await page.locator("#controllerSeatLegend span").count(), 4);
+  assert.deepEqual(await page.locator("#controllerSeatLegend b").allTextContents(), ["P1", "P2", "P3", "P4"]);
+  await page.waitForTimeout(850);
+  await page.locator(".workbench").screenshot({ path: "/tmp/gabecubeaura-concept-controllers-four-seats.png" });
+  await page.locator('[data-controller-colour-mode="players"]').click();
+  assert.equal(await page.locator('[data-controller-colour-mode="players"]').getAttribute("aria-pressed"), "true");
+  assert.equal(await page.locator("#controllerBatteryColours").isHidden(), true);
+  assert.equal(await page.locator("#controllerPlayerColours").isVisible(), true);
+  await page.locator("#controllerScene").selectOption("gauge");
+  await page.locator("#controllerVariant").selectOption("clean");
+  await page.waitForTimeout(250);
+  const playerSeatPixels = await page.locator("#logicalLeds i").evaluateAll((items) => items.map((led) => getComputedStyle(led).backgroundColor));
+  assert.deepEqual([playerSeatPixels[0], playerSeatPixels[7], playerSeatPixels[9], playerSeatPixels[16]], ["rgb(24, 130, 159)", "rgb(166, 117, 38)", "rgb(109, 77, 166)", "rgb(49, 137, 90)"]);
+  assert.deepEqual(await page.locator("#controllerSeatLegend b").evaluateAll((items) => items.map((item) => getComputedStyle(item).color)), ["rgb(37, 200, 245)", "rgb(255, 180, 59)", "rgb(167, 119, 255)", "rgb(75, 211, 138)"]);
+  await page.locator("#padPlayerFour").fill("#ffff00");
+  await page.waitForFunction(() => getComputedStyle(document.querySelectorAll("#logicalLeds i")[16]).backgroundColor === "rgb(166, 166, 0)");
+  await page.locator("#padPlayerFour").fill("#4bd38a");
+  await page.waitForFunction(() => getComputedStyle(document.querySelectorAll("#logicalLeds i")[16]).backgroundColor === "rgb(49, 137, 90)");
+  await page.locator("#controllerColourMode").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "/tmp/gabecubeaura-concept-controller-colour-mode.png" });
+  await page.locator(".workbench").screenshot({ path: "/tmp/gabecubeaura-concept-controllers-player-seats.png" });
+  await page.locator("#controllerTarget").selectOption("3");
+  assert.equal(await page.locator("#padChargingLabel").textContent(), "Controller 4 charging");
+  await page.locator("#controllerScene").selectOption("connect");
   await page.waitForFunction(() => document.querySelector("#providerBadge")?.textContent === "CONTROLLER EVENT");
-  assert.equal(await page.locator("#providerBadge").textContent(), "CONTROLLER EVENT");
+  assert.match(await page.locator("#signalReadout").textContent(), /P4/);
   for (const scene of ["duo", "gauge", "connect", "low", "charging"]) {
     await page.locator("#controllerScene").selectOption(scene);
     const variants = await page.locator("#controllerVariant option").evaluateAll((options) => options.map((option) => option.value));
     assert.equal(variants.length, 3);
-    for (const variant of variants) await page.locator("#controllerVariant").selectOption(variant);
+    for (const variant of variants) {
+      await page.locator("#controllerVariant").selectOption(variant);
+      await page.locator("#controllerPlay").click();
+      await waitForLit(page);
+    }
   }
+  await page.locator("#controllerCount").selectOption("3");
+  assert.equal(await page.locator('#controllerScene option[value="duo"]').textContent(), "Three Seats");
+  assert.equal(await page.locator('[data-controller-row="4"]').isHidden(), true);
+  assert.equal(await page.locator("#controllerTarget option").count(), 3);
+  await page.locator("#padTwo").fill("73");
+  await page.locator("#controllerScene").selectOption("gauge");
+  await page.locator("#controllerVariant").selectOption("tip");
+  await page.waitForFunction(() => getComputedStyle(document.querySelectorAll("#logicalLeds i")[9]).backgroundColor === "rgb(160, 162, 166)" && getComputedStyle(document.querySelectorAll("#logicalLeds i")[6]).backgroundColor === "rgb(166, 117, 38)");
+  assert.match(await page.locator("#stageExplain").textContent(), /Every seat fills left to right/);
+  await page.screenshot({ path: "/tmp/gabecubeaura-concept-controller-auto-layout.png" });
+  await page.locator("#controllerCount").selectOption("2");
+  await page.waitForFunction(() => getComputedStyle(document.querySelectorAll("#logicalLeds i")[11]).backgroundColor === "rgb(160, 162, 166)" && getComputedStyle(document.querySelectorAll("#logicalLeds i")[16]).backgroundColor === "rgb(166, 117, 38)");
+  assert.match(await page.locator("#stageExplain").textContent(), /Opposing seats fill towards the centre/);
+  await page.locator("#controllerCount").selectOption("4");
+  await page.waitForFunction(() => getComputedStyle(document.querySelectorAll("#logicalLeds i")[5]).backgroundColor === "rgb(160, 162, 166)" && getComputedStyle(document.querySelectorAll("#logicalLeds i")[7]).backgroundColor === "rgb(166, 117, 38)");
+  assert.match(await page.locator("#stageExplain").textContent(), /Opposing seats fill towards the centre/);
+  await page.locator("#padTwo").fill("41");
+  await page.locator("#controllerScene").selectOption("duo");
+  await page.locator("#controllerCount").selectOption("1");
+  assert.equal(await page.locator('#controllerScene option[value="duo"]').evaluate((option) => option.disabled), true);
+  assert.equal(await page.locator("#controllerScene").inputValue(), "gauge");
+  assert.equal(await page.locator('[data-controller-row="2"]').isHidden(), true);
+  await page.locator("#controllerCount").selectOption("4");
+
+  await page.locator('[data-tab="screen-sync"]').click();
+  await page.waitForFunction(() => document.querySelector("#providerBadge")?.textContent === "SCREEN SYNC");
+  assert.match(await page.locator("#signalName").textContent(), /Panorama/);
+  await page.locator("#screenSyncScene").selectOption("night");
+  await page.locator("#screenSyncStyle").selectOption("ambient");
+  await page.waitForFunction(() => {
+    const colours = [...document.querySelectorAll("#logicalLeds i")].map((led) => getComputedStyle(led).backgroundColor);
+    return new Set(colours).size === 1;
+  });
+  assert.match(await page.locator("#signalName").textContent(), /Ambient/);
+  await page.locator("#screenSyncBrightness").fill("48");
+  assert.equal(await page.locator("#screenSyncBrightnessValue").textContent(), "48%");
+  await page.locator("#screenSyncReplay").click();
+  await page.locator(".workbench").screenshot({ path: "/tmp/gabecubeaura-concept-screen-sync.png" });
+
+  await page.locator('[data-tab="witcher"]').click();
+  await page.waitForFunction(() => document.querySelector("#providerBadge")?.textContent === "EXPERIMENTAL");
+  assert.match(await page.locator('[data-pane="witcher"]').innerText(), /-net -debugscripts/);
+  assert.match(await page.locator('[data-pane="witcher"]').innerText(), /DebugScriptsForceFlush=true/);
+  await page.locator("#witcherHealth").fill("24");
+  await page.locator("#witcherStamina").fill("61");
+  await page.locator("#witcherToxicity").fill("50");
+  await page.locator("#witcherAdrenaline").selectOption("3");
+  assert.equal(await page.locator("#witcherHealthValue").textContent(), "24%");
+  await page.waitForFunction(() => document.querySelector("#signalReadout")?.textContent === "Vitality 24% · stamina 61%");
+  assert.match(await page.locator("#signalReadout").textContent(), /Vitality 24% · stamina 61%/);
+  await page.locator('[data-witcher-sign="igni"]').click();
+  await page.waitForFunction(() => document.querySelector("#providerBadge")?.textContent === "WITCHER SIGN");
+  await waitForLit(page);
+  await page.waitForFunction(() => document.querySelector("#providerBadge")?.textContent === "EXPERIMENTAL", null, { timeout: 2500 });
+  await page.locator(".workbench").screenshot({ path: "/tmp/gabecubeaura-concept-witcher.png" });
 
   await page.locator('[data-tab="weather"]').click();
   await page.waitForFunction(() => document.querySelector("#providerBadge")?.textContent === "WEATHER");
@@ -250,7 +349,7 @@ try {
   const mobileMachineRatio = await mobile.locator(".steam-machine").evaluate((element) => element.offsetWidth / element.offsetHeight);
   assert.ok(Math.abs(mobileMachineRatio - 156 / 152) < 0.015, `mobile machine front ratio: ${mobileMachineRatio}`);
   await mobile.screenshot({ path: "/tmp/gabecubeaura-concept-mobile.png", fullPage: true });
-  for (const tab of ["customization", "artwork", "performance", "launches", "playtime", "events", "controllers", "weather", "priorities"]) {
+  for (const tab of ["customization", "artwork", "performance", "launches", "playtime", "events", "controllers", "weather", "screen-sync", "witcher", "priorities"]) {
     await mobile.locator(`[data-tab="${tab}"]`).click();
     const width = await mobile.evaluate(() => document.documentElement.scrollWidth - innerWidth);
     assert.ok(width <= 1, `${tab} horizontal overflow: ${width}px`);
@@ -262,7 +361,7 @@ try {
   const overflow = await mobile.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   assert.ok(overflow <= 1, `mobile horizontal overflow: ${overflow}px`);
   assert.deepEqual(errors, []);
-  console.log("PASS: GabeCubeAura 1.0 mockup, file:// datasets, Customization+ rendering, per-game/source launch palettes, all major tabs and 390px layout");
+  console.log("PASS: GabeCubeAura 1.2 beta lab, Screen Sync, experimental Witcher HUD, four-controller simulator, file:// datasets, all major tabs and 390px layout");
 } finally {
   await browser.close();
 }

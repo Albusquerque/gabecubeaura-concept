@@ -83,6 +83,15 @@ const WEATHER_OPTIONS = {
   storm: ["Pulse and echoes", "Storm break"],
 };
 const WEATHER_ICONS = { clear_day: "☀", clear_night: "☾", rain: "☂", cloud: "☁", breaks: "⛅", breaks_night: "☾", snow: "❄", storm: "⚡" };
+const SCREEN_SYNC_SCENES = {
+  sky: [[35, 124, 205], [68, 189, 225], [236, 216, 170], [224, 130, 60]],
+  forest: [[20, 61, 45], [45, 126, 59], [182, 174, 68], [235, 199, 107]],
+  night: [[8, 18, 54], [25, 49, 112], [178, 43, 162], [38, 206, 218]],
+};
+const WITCHER_SIGNS = {
+  aard: [158, 214, 255], axii: [255, 255, 255], igni: [255, 79, 10],
+  quen: [255, 205, 68], yrden: [200, 81, 255],
+};
 const LAUNCH_PATTERNS = [
   ["arpege-crossed", "Crossed arpeggio"], ["two-hands", "Two hands"],
   ["legato", "Legato"], ["nocturne", "Nocturne"], ["crescendo", "Crescendo"],
@@ -122,11 +131,14 @@ function defaultState() {
     timerSource: "families", timerDuration: 60, timerRemaining: 2520, timerScale: 0, timerColor: "white", timerSpeed: 60, timerRunning: false, timerElapsed: 0,
     eventKind: "notification", eventVariants: { notification: "notification-beacon", achievement: "achievement-rebound", screenshot: "screenshot-bloom", recording: "record-start" },
     recording: false, recordIsolation: true,
-    padCount: 2, padOne: 96, padTwo: 41, padCharging: false, controllerWhere: "home", chargeMode: "continuous-home", alertWhere: "both", lowThreshold: 20, padBrightness: 65,
+    padCount: 2, padOne: 96, padTwo: 41, padThree: 73, padFour: 28, controllerTarget: 1, padCharging: false, controllerWhere: "home", chargeMode: "continuous-home", alertWhere: "both", lowThreshold: 20, padBrightness: 65,
+    controllerColourMode: "battery", padPlayerColours: ["#25c8f5", "#ffb43b", "#a777ff", "#4bd38a"],
     controllerScene: "duo", controllerVariants: { duo: "double-welcome", gauge: "tip", connect: "welcome", low: "beacon", charging: "breath" },
     padHealthy: "#00b42d", padMedium: "#e66e00", padLow: "#dc0c18", padCharge: "#0091dc",
     weatherCondition: "clear_day", weatherVariants: { clear_day: 0, clear_night: 0, rain: 0, cloud: 1, breaks: 0, breaks_night: 0, snow: 1, storm: 0 },
     weatherWhere: "off", weatherTopbar: false, weatherUnit: "celsius", weatherBrightness: 70, weatherCutoff: 0, weatherStart: 0,
+    screenSyncStyle: "panorama", screenSyncScene: "sky", screenSyncBrightness: 63, screenSyncIntensity: 85, screenSyncBlackBars: true, screenSyncStart: 0,
+    witcherHealth: 72, witcherStamina: 86, witcherToxicity: 0, witcherAdrenaline: 2, witcherCombat: true,
     customPattern: "steady", customPaletteCount: 2, customColours: ["#FFD000", "#00C8FF", "#FF3C9D"], customBrightness: 128, customSpeed: 50, customDirection: "forward",
     launchGame: "drg", launchSource: "hero", launchColourCount: 2, launchPattern: "arpege-crossed", launchDuration: 20,
     launchProfiles: freshLaunchProfiles(), launchArtworkPalettes: {},
@@ -237,58 +249,85 @@ function countdownFrame() {
   const source = state.timerSource === "families" ? "Steam Families" : "Personal timer";
   return { logical: make(count), physical: make(physicalCount), name: `${source} countdown`, readout: `${formatTime(remaining)} left · ${count}/17 logical LEDs`, explain: "The bright point travels right to left. Below 15 minutes the bar turns amber; below five minutes it turns red.", badge: "PLAYTIME" };
 }
-function controllerColour(percent, charging = false) {
+function controllerColour(percent, charging = false, player = 0) {
   if (charging) return hexToRgb(state.padCharge);
+  if (state.controllerColourMode === "players") return hexToRgb(state.padPlayerColours[player]);
   if (percent <= state.lowThreshold) return hexToRgb(state.padLow);
   if (percent <= Math.max(35, state.lowThreshold + 5)) return hexToRgb(state.padMedium);
   return hexToRgb(state.padHealthy);
 }
-function controllerGauge(percent, count = 17, fromRight = false, charging = false) {
-  const result = Array.from({ length: count }, () => [...OFF]);
-  const lit = percent > 0 ? Math.max(1, Math.round(percent * count / 100)) : 0;
-  for (let index = 0; index < lit; index++) result[fromRight ? count - 1 - index : index] = controllerColour(percent, charging);
-  return result;
+function controllerRound(value) {
+  const lower = Math.floor(value), fraction = value - lower;
+  if (fraction < .5) return lower;
+  if (fraction > .5) return lower + 1;
+  return lower % 2 === 0 ? lower : lower + 1;
+}
+function controllerScale(colour, amount) { return colour.map((value) => controllerRound(value * amount)); }
+function controllerPercents() { return [state.padOne, state.padTwo, state.padThree, state.padFour].slice(0, state.padCount); }
+function controllerZones(count = state.padCount) {
+  if (count === 1) return [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]];
+  if (count === 2) return [[0, 1, 2, 3, 4, 5, 6, 7], [16, 15, 14, 13, 12, 11, 10, 9]];
+  if (count === 3) return [[0, 1, 2, 3, 4], [6, 7, 8, 9, 10], [12, 13, 14, 15, 16]];
+  return [[0, 1, 2, 3], [7, 6, 5, 4], [9, 10, 11, 12], [16, 15, 14, 13]];
+}
+function controllerGaugeInto(frame, zone, percent, charging = false, player = 0) {
+  const count = Math.min(zone.length, Math.max(percent > 0 ? 1 : 0, controllerRound(percent * zone.length / 100)));
+  const lit = zone.slice(0, count);
+  lit.forEach((index) => put(frame, index, controllerColour(percent, charging, player)));
+  return lit;
+}
+function controllerChargeInto(frame, zone, percent, variant, seconds, continuous = false, player = 0) {
+  const lit = controllerGaugeInto(frame, zone, percent, true, player);
+  if (!lit.length) return lit;
+  let t = seconds;
+  if (continuous) t %= { current: 2.55, breath: 3.2, spark: 2.55 }[variant];
+  if (variant === "current") {
+    if (t < 1.95) {
+      const position = Math.min(lit.length - 1, Math.floor(t / 1.95 * lit.length));
+      put(frame, lit[position], WHITE);
+      if (position > 0) put(frame, lit[position - 1], controllerScale(WHITE, .65));
+    } else put(frame, lit[lit.length - 1], WHITE);
+  } else if (variant === "breath") {
+    const centre = t / 2.75 * (lit.length + 3) - 2;
+    lit.forEach((index, position) => {
+      const distance = Math.abs(position - centre);
+      if (distance < 2.8) put(frame, index, distance < 1 ? WHITE : controllerScale(WHITE, .7));
+    });
+    put(frame, lit[lit.length - 1], WHITE);
+  } else {
+    for (let offset = 0; offset < 3; offset++) {
+      const position = Math.floor(((t / 2.15 + offset / 3) % 1) * lit.length);
+      put(frame, lit[position], offset === 0 ? WHITE : controllerScale(WHITE, .68));
+    }
+    put(frame, lit[lit.length - 1], WHITE);
+  }
+  return lit;
+}
+function controllerBaseRaw(animateCharging = false) {
+  let frame = blank();
+  const zones = controllerZones(), percents = controllerPercents();
+  const chargingAllowed = state.chargeMode === "continuous-everywhere" || (state.chargeMode === "continuous-home" && state.context === "home");
+  zones.forEach((zone, player) => {
+    const charging = state.padCharging && player === state.controllerTarget && chargingAllowed && percents[player] < 100;
+    const lit = charging && animateCharging
+      ? controllerChargeInto(frame, zone, percents[player], state.controllerVariants.charging, clock / 1000, true, player)
+      : controllerGaugeInto(frame, zone, percents[player], charging, player);
+    if (!charging && lit.length && state.controllerVariants.gauge === "tip") put(frame, lit[lit.length - 1], WHITE);
+  });
+  if (state.controllerVariants.gauge === "horizon") frame = frame.map((colour) => controllerScale(colour, .58));
+  return frame;
 }
 function controllerBaseFrame(animateCharging = false) {
-  let frame;
-  const chargingAllowed = state.chargeMode === "continuous-everywhere" || (state.chargeMode === "continuous-home" && state.context === "home");
-  const activePercent = state.padCount === 2 ? state.padTwo : state.padOne;
-  const charging = state.padCharging && chargingAllowed && activePercent < 100;
-  if (state.padCount === 2) {
-    const first = controllerGauge(state.padOne, 8);
-    const second = controllerGauge(state.padTwo, 8, true, charging);
-    frame = [...first, [...OFF], ...second];
-    const leftTip = first.findLastIndex(isLit);
-    const rightTip = second.findIndex(isLit);
-    if (leftTip >= 0) frame[leftTip] = [...WHITE];
-    if (rightTip >= 0) frame[9 + rightTip] = [...WHITE];
-    if (charging && state.padTwo < 100 && animateCharging) {
-      const lit = second.map((color, index) => isLit(color) ? index : -1).filter((index) => index >= 0);
-      if (lit.length) {
-        const phase = (clock / 1000) % 3.2;
-        const point = 16 - Math.min(lit.length - 1, Math.floor(ease(phase / 2.75) * lit.length));
-        put(frame, point, WHITE);
-      }
-    }
-  } else {
-    frame = controllerGauge(state.padOne, 17, false, charging);
-    const tip = frame.findLastIndex(isLit);
-    if (tip >= 0 && state.controllerVariants.gauge !== "clean") frame[tip] = [...WHITE];
-    if (charging && state.padOne < 100 && animateCharging) {
-      const lit = frame.filter(isLit).length;
-      const point = Math.min(lit - 1, Math.floor(ease(((clock / 1000) % 3.2) / 2.75) * lit));
-      if (point >= 0) put(frame, point, WHITE);
-    }
-    if (state.controllerVariants.gauge === "horizon") frame = frame.map((color) => scale(color, .58));
-  }
-  return frame.map((color) => scale(color, state.padBrightness / 100));
+  return controllerBaseRaw(animateCharging).map((colour) => controllerScale(colour, state.padBrightness / 100));
 }
 function controllerFrame() {
-  const frame = controllerBaseFrame(true);
-  const second = state.padCount === 2 ? ` · P2 ${state.padTwo}%` : "";
-  const activePercent = state.padCount === 2 ? state.padTwo : state.padOne;
-  const charging = state.padCharging && state.chargeMode !== "off" && activePercent < 100;
-  return { logical: frame, physical: frame, name: charging ? "Controller charging" : state.padCount === 2 ? "Two mirrored controllers" : "Controller battery", readout: `P1 ${state.padOne}%${second}${charging ? " · charging" : ""}`, explain: state.padCount === 2 ? "Eight LEDs per player, mirrored towards a dark centre. White tips mark each reported charge level." : "The lit length reflects the reported battery. A white tip can mark its exact end.", badge: "CONTROLLERS" };
+  const frame = controllerBaseFrame(true), percents = controllerPercents();
+  const charging = state.padCharging && state.chargeMode !== "off" && percents[state.controllerTarget] < 100;
+  const readout = percents.map((percent, index) => `P${index + 1} ${percent}%`).join(" · ");
+  const layout = state.padCount === 1 ? "17 LEDs" : state.padCount === 2 ? "8 + centre + 8" : state.padCount === 3 ? "5 + separator + 5 + separator + 5" : "4 + 4 + centre + 4 + 4";
+  const colourMeaning = state.controllerColourMode === "players" ? "fixed player colours" : "battery-level colours";
+  const direction = state.padCount === 3 ? " Every seat fills left to right." : state.padCount > 1 ? " Opposing seats fill towards the centre." : "";
+  return { logical: frame, physical: frame, name: charging ? `Controller ${state.controllerTarget + 1} charging` : `${state.padCount} controller${state.padCount === 1 ? "" : "s"}`, readout: `${readout}${charging ? ` · P${state.controllerTarget + 1} charging` : ""}`, explain: `${layout}. Each reported battery keeps its own fixed seat and white endpoint, using ${colourMeaning}.${direction}`, badge: "CONTROLLERS" };
 }
 function weatherFrame() {
   const variant = state.weatherVariants[state.weatherCondition];
@@ -301,58 +340,177 @@ function weatherFrame() {
   });
   return { logical: frame, physical: frame, name: `${state.weatherCondition.replaceAll("_", " ")} · ${WEATHER_OPTIONS[state.weatherCondition][variant]}`, readout: `${state.weatherUnit === "fahrenheit" ? "64°F" : "18°C"} · sample sky`, explain: "An eight-second weather loop repeats on the light bar. The exact temperature is text only, never encoded as LED colours.", badge: "WEATHER" };
 }
-function controllerPreviewFrame(overlay) {
-  const t = (clock - overlay.start) / 1000;
-  const variant = overlay.variant;
-  const percent = overlay.kind === "low" ? Math.min(state.padOne, state.lowThreshold) : overlay.kind === "charging" && state.padCount === 2 ? state.padTwo : state.padOne;
-  const frame = blank();
-  if (overlay.kind === "duo") {
-    const settled = controllerBaseFrame(false);
-    const finishAt = variant === "twin" ? 1.45 : variant === "focus" ? 3.3 : 3.4;
-    if (variant === "twin" && t < finishAt) {
-      const fraction = ease(t / finishAt);
-      for (let i = 0; i < Math.round(fraction * 8); i++) frame[i] = settled[i];
-      for (let i = 16; i > 16 - Math.round(fraction * 8); i--) frame[i] = settled[i];
-    } else {
-      settled.forEach((color, index) => { frame[index] = color; });
-      if (t < finishAt) {
-        const step = variant === "focus" ? (t < 1.7 ? Math.floor(ease(t / 1.7) * 7) : Math.floor(ease((t - 1.7) / 1.6) * 7)) : t < 1.6 ? Math.floor(ease(t / 1.6) * 7) : Math.floor((1 - ease((t - 1.6) / 1.8)) * 7);
-        if (variant !== "focus" || t < 1.7) put(frame, step, WHITE);
-        if (variant !== "focus" || t >= 1.7) put(frame, 16 - step, WHITE);
-      }
-    }
-    frame[8] = [...OFF];
-  } else if (overlay.kind === "gauge") {
-    return controllerFrame();
-  } else if (overlay.kind === "connect") {
-    if (t < 1.75) {
-      if (variant === "welcome") { const point = Math.min(8, Math.floor(ease(t / 1.3) * 8)); put(frame, point, CYAN); put(frame, 16 - point, CYAN); if (t > 1.3) fill(frame, 6, 10, WHITE); }
-      if (variant === "orbit") { const point = Math.floor(ease(t < 1.15 ? t / 1.15 : 2 - t / 1.15) * 16); put(frame, point, WHITE); put(frame, point - 1, CYAN); put(frame, point + 1, CYAN); }
-      if (variant === "handshake") { const point = Math.floor(ease(t / 1.65) * 8); put(frame, 8 - point, WHITE); put(frame, 8 + point, WHITE); }
-    } else return controllerFrame();
-  } else if (overlay.kind === "low") {
-    const low = Math.max(1, Math.round(percent / 100 * 17));
-    const red = hexToRgb(state.padLow);
-    if (variant === "beacon" && t < 1.25) fill(frame, 0, Math.max(low, Math.round((1 - ease(t / 1.25)) * 17)) - 1, hexToRgb(state.padMedium));
-    else { fill(frame, 0, low - 1, variant === "heartbeat" && t % .92 < .25 ? WHITE : red); if (variant === "drain" && t < 2.4) put(frame, Math.floor((t < 1.2 ? t / 1.2 : 2 - t / 1.2) * 16), WHITE); if (variant === "beacon" && ((t > 1.5 && t < 1.73) || (t > 1.91 && t < 2.15))) put(frame, low - 1, WHITE); }
-  } else if (overlay.kind === "charging") {
-    const width = state.padCount === 2 ? 8 : 17;
-    const lit = Math.max(1, Math.round(percent / 100 * width));
-    const chargedIndices = state.padCount === 2 ? Array.from({ length: lit }, (_, index) => 16 - index) : Array.from({ length: lit }, (_, index) => index);
-    if (state.padCount === 2) {
-      const first = controllerGauge(state.padOne, 8);
-      first.forEach((color, index) => { frame[index] = color; });
-      const firstTip = first.findLastIndex(isLit);
-      if (firstTip >= 0) put(frame, firstTip, WHITE);
-    }
-    chargedIndices.forEach((index) => put(frame, index, hexToRgb(state.padCharge)));
-    if (variant === "current") put(frame, chargedIndices[Math.min(lit - 1, Math.floor(ease(t / 1.95) * lit))], WHITE);
-    if (variant === "breath") { const centre = ease(t / 2.75) * (lit + 3) - 2; chargedIndices.forEach((index, position) => { if (Math.abs(position - centre) < 2.8) put(frame, index, Math.abs(position - centre) < 1 ? WHITE : ICE); }); }
-    if (variant === "spark") for (let i = 0; i < 3; i++) put(frame, chargedIndices[Math.floor(((t / 2.15 + i / 3) % 1) * lit)], i === 0 ? WHITE : ICE);
-    put(frame, chargedIndices[lit - 1], WHITE);
+function screenSyncFrame() {
+  const palette = SCREEN_SYNC_SCENES[state.screenSyncScene] || SCREEN_SYNC_SCENES.sky;
+  const movement = ((clock - state.screenSyncStart) / 9000) % 1;
+  const raw = Array.from({ length: 17 }, (_, index) => {
+    const position = (index / 16 + movement * .18) % 1;
+    const scaled = position * (palette.length - 1);
+    const left = Math.floor(scaled), right = Math.min(palette.length - 1, left + 1);
+    let colour = blend(palette[left], palette[right], scaled - left);
+    const average = colour.reduce((sum, value) => sum + value, 0) / 3;
+    colour = colour.map((value) => average + (value - average) * state.screenSyncIntensity / 100);
+    return colour.map((value) => clamp(Math.round(value * state.screenSyncBrightness / 100), 0, 255));
+  });
+  const frame = state.screenSyncStyle === "ambient"
+    ? Array.from({ length: 17 }, () => [0, 1, 2].map((channel) => Math.round(raw.reduce((sum, pixel) => sum + pixel[channel], 0) / raw.length)))
+    : raw;
+  return { logical: frame, physical: frame, name: `Screen Sync · ${state.screenSyncStyle === "ambient" ? "Ambient" : "Panorama"}`, readout: `${state.screenSyncScene} sample · local simulation`, explain: "The real beta samples Gamescope in memory. Steam activity, alerts, launches and countdowns remain above this permanent display.", badge: "SCREEN SYNC" };
+}
+function witcherVitalsFrame() {
+  const frame = blank(), seconds = clock / 1000;
+  const healthLit = state.witcherHealth > 0 ? Math.ceil(state.witcherHealth * 8 / 100) : 0;
+  const staminaLit = state.witcherStamina > 0 ? Math.ceil(state.witcherStamina * 8 / 100) : 0;
+  let healthBrightness = state.witcherCombat ? 205 : 155;
+  if (state.witcherCombat && state.witcherHealth > 0 && state.witcherHealth <= 25) {
+    healthBrightness = Math.round(125 + 65 * (.5 + .5 * Math.sin(seconds * Math.PI * 2)));
   }
-  const scaled = frame.map((color) => scale(color, state.padBrightness / 100));
-  return { logical: scaled, physical: scaled, name: `${overlay.kind === "duo" ? "Two controllers" : overlay.kind === "low" ? "Low battery" : overlay.kind === "connect" ? "Controller connected" : "Charging"} · ${CONTROLLER_OPTIONS[overlay.kind]?.find(([id]) => id === variant)?.[1] || "preview"}`, readout: overlay.kind === "duo" ? `P1 ${state.padOne}% · P2 ${state.padTwo}%` : `${percent}% · demo`, explain: "A short controller animation temporarily replaces the everyday display.", badge: "CONTROLLER EVENT" };
+  for (let index = 0; index < healthLit; index++) frame[index] = [healthBrightness, 10, 8];
+  for (let offset = 0; offset < staminaLit; offset++) frame[16 - offset] = [190, 130, 18];
+  if (state.witcherAdrenaline) {
+    const brightness = [75, 135, 205][state.witcherAdrenaline - 1];
+    frame[8] = [brightness, Math.round(brightness * .48), 8];
+  }
+  const toxicEdges = state.witcherToxicity > 0 ? Math.ceil(state.witcherToxicity * 4 / 100) : 0;
+  const toxicGreen = Math.round(85 + state.witcherToxicity * 1.1);
+  for (let index = 0; index < toxicEdges; index++) {
+    frame[index] = [20, toxicGreen, 22]; frame[16 - index] = [20, toxicGreen, 22];
+  }
+  return { logical: frame, physical: frame, name: "The Witcher 3 · experimental HUD", readout: `Vitality ${state.witcherHealth}% · stamina ${state.witcherStamina}%`, explain: "Left: vitality. Centre: adrenaline. Right: stamina. Green edges: toxicity. Live use requires the verified companion script; this page is manual simulation only.", badge: "EXPERIMENTAL" };
+}
+function witcherSignFrame(overlay) {
+  const elapsed = Math.max(0, (clock - overlay.start) / 1000), colour = WITCHER_SIGNS[overlay.sign];
+  const frame = blank(), radius = Math.min(8, Math.floor(elapsed / .9 * 10));
+  for (const [distance, strength] of [[radius, 1], [radius - 1, .42]]) {
+    if (distance < 0) continue;
+    for (const index of new Set([8 - distance, 8 + distance])) if (index >= 0 && index < 17) frame[index] = scale(colour, strength);
+  }
+  return { logical: frame, physical: frame, name: `${overlay.sign[0].toUpperCase()}${overlay.sign.slice(1)} cast`, readout: "0.9 s centre-out wave", explain: "A Sign briefly replaces the HUD, then the current vitality and stamina values return.", badge: "WITCHER SIGN" };
+}
+function controllerGroupRaw(variant, age) {
+  const zones = controllerZones(), percents = controllerPercents(), frame = blank();
+  const tips = zones.map((zone, player) => {
+    const lit = controllerGaugeInto(frame, zone, percents[player], false, player);
+    return lit.at(-1);
+  });
+  const revealEnd = { twin: 1.45, focus: 3.3, "double-welcome": 3.4 }[variant];
+  if (state.padCount === 2) {
+    const [left, right] = zones, [leftTip, rightTip] = tips;
+    if (variant === "twin" && age < revealEnd) {
+      const leftCount = controllerRound(left.filter((index) => isLit(frame[index])).length * age / revealEnd);
+      const rightCount = controllerRound(right.filter((index) => isLit(frame[index])).length * age / revealEnd);
+      left.slice(leftCount).forEach((index) => put(frame, index, OFF));
+      right.slice(rightCount).forEach((index) => put(frame, index, OFF));
+    } else if (variant === "focus" && age < revealEnd) {
+      if (age < 1.7) {
+        let index = Math.min(7, Math.floor(age / 1.7 * 8));
+        if (index === leftTip) index -= 1;
+        if (index >= 0) put(frame, index, WHITE);
+      } else {
+        const count = Math.min(8, Math.floor((age - 1.7) / 1.6 * 8) + 1);
+        let index = 17 - count;
+        if (index === rightTip) index += 1;
+        if (index < 17) put(frame, index, WHITE);
+      }
+    } else if (variant === "double-welcome" && age < revealEnd) {
+      let step;
+      if (age < 1.45) step = Math.min(7, Math.floor(age / 1.45 * 8));
+      else if (age < 1.9) step = 7;
+      else step = Math.max(0, Math.min(7, Math.floor((3.4 - age) / 1.5 * 8)));
+      const leftIndex = step === leftTip ? step - 1 : step;
+      const rightIndex = 16 - step === rightTip ? 17 - step : 16 - step;
+      if (leftIndex >= 0) put(frame, leftIndex, WHITE);
+      if (rightIndex < 17) put(frame, rightIndex, WHITE);
+    }
+    if (age >= revealEnd) { if (leftTip !== undefined) put(frame, leftTip, WHITE); if (rightTip !== undefined) put(frame, rightTip, WHITE); }
+    put(frame, 8, OFF);
+    return frame;
+  }
+  if (variant === "twin" && age < revealEnd) {
+    zones.forEach((zone) => {
+      const visible = controllerRound(zone.filter((index) => isLit(frame[index])).length * age / revealEnd);
+      zone.slice(visible).forEach((index) => put(frame, index, OFF));
+    });
+  } else if (variant === "focus" && age < revealEnd) {
+    const slot = revealEnd / zones.length;
+    const player = Math.min(zones.length - 1, Math.floor(age / slot));
+    const zone = zones[player], localAge = age - player * slot;
+    let position = Math.min(zone.length - 1, Math.floor(localAge / slot * zone.length));
+    if (zone[position] === tips[player]) position = Math.max(0, position - 1);
+    put(frame, zone[position], WHITE);
+  } else if (variant === "double-welcome" && age < revealEnd) {
+    zones.forEach((zone, player) => {
+      let step;
+      if (age < 1.45) step = Math.min(zone.length - 1, Math.floor(age / 1.45 * zone.length));
+      else if (age < 1.9) step = zone.length - 1;
+      else step = Math.max(0, Math.min(zone.length - 1, Math.floor((3.4 - age) / 1.5 * zone.length)));
+      if (zone[step] === tips[player]) step = Math.max(0, step - 1);
+      put(frame, zone[step], WHITE);
+    });
+  }
+  if (age >= revealEnd) tips.forEach((tip) => { if (tip !== undefined) put(frame, tip, WHITE); });
+  return frame;
+}
+function controllerSignalRaw(kind, variant, elapsed, percent, player) {
+  const frame = blank(), cyan = hexToRgb(state.padCharge), red = hexToRgb(state.padLow);
+  if (kind === "connect") {
+    const introEnd = { welcome: 1.3, orbit: 2.3, handshake: 1.65 }[variant];
+    if (elapsed < introEnd) {
+      if (variant === "welcome") {
+        const step = Math.min(7, Math.floor(elapsed / 1.3 * 8));
+        put(frame, step, cyan); put(frame, 16 - step, cyan);
+        if (step) { put(frame, step - 1, controllerScale(cyan, .45)); put(frame, 17 - step, controllerScale(cyan, .45)); }
+      } else if (variant === "orbit") {
+        const phase = elapsed < 1.15 ? elapsed / 1.15 : 2 - elapsed / 1.15;
+        const index = Math.min(16, Math.max(0, Math.floor(phase * 16)));
+        put(frame, index, WHITE); put(frame, index - 1, cyan); put(frame, index + 1, cyan);
+      } else {
+        const step = Math.min(8, Math.floor(elapsed / 1.65 * 9));
+        put(frame, 8 - step, WHITE); put(frame, 8 + step, WHITE);
+      }
+    } else if (elapsed < 1.75 && variant === "welcome") fill(frame, 6, 10, WHITE);
+    else {
+      const lit = controllerGaugeInto(frame, controllerZones(1)[0], percent, false, player);
+      if (lit.length) put(frame, lit.at(-1), WHITE);
+    }
+  } else if (kind === "low") {
+    if (variant === "beacon") {
+      if (elapsed < 1.25) {
+        const count = Math.max(controllerRound((1 - elapsed / 1.25) * 17), controllerRound((percent || 0) / 100 * 17));
+        fill(frame, 0, count - 1, hexToRgb(state.padMedium));
+      } else {
+        const lit = controllerGaugeInto(frame, controllerZones(1)[0], percent, false, player);
+        lit.forEach((index) => put(frame, index, red));
+        if ((1.5 < elapsed && elapsed < 1.73 || 1.91 < elapsed && elapsed < 2.15) && lit.length) put(frame, lit.at(-1), WHITE);
+      }
+    } else if (variant === "drain") {
+      const lit = controllerGaugeInto(frame, controllerZones(1)[0], percent, false, player);
+      lit.forEach((index) => put(frame, index, red));
+      if (elapsed < 2.4) {
+        const phase = elapsed < 1.2 ? elapsed / 1.2 : 2 - elapsed / 1.2;
+        put(frame, Math.min(16, Math.max(0, Math.floor(phase * 16))), WHITE);
+      }
+    } else {
+      const beat = elapsed < 2.2 && (elapsed % .92 < .24 || .38 < elapsed % .92 && elapsed % .92 < .58);
+      const lit = controllerGaugeInto(frame, controllerZones(1)[0], percent, false, player);
+      lit.forEach((index) => put(frame, index, beat ? WHITE : controllerScale(red, .7)));
+      if (beat) put(frame, 8, red);
+    }
+  } else if (kind === "charging") controllerChargeInto(frame, controllerZones(1)[0], percent, variant, elapsed, false, player);
+  return frame;
+}
+function controllerPreviewFrame(overlay) {
+  const elapsed = Math.max(0, (clock - overlay.start) / 1000), variant = overlay.variant;
+  if (overlay.kind === "gauge") return controllerFrame();
+  const percents = controllerPercents(), target = clamp(overlay.target ?? state.controllerTarget, 0, percents.length - 1);
+  const percent = overlay.kind === "low" ? Math.min(percents[target], state.lowThreshold) : percents[target];
+  const raw = overlay.kind === "duo" ? controllerGroupRaw(variant, elapsed) : controllerSignalRaw(overlay.kind, variant, elapsed, percent, target);
+  const frame = raw.map((colour) => controllerScale(colour, state.padBrightness / 100));
+  const seats = state.padCount === 2 ? "Two controllers" : state.padCount === 3 ? "Three Seats" : state.padCount === 4 ? "Four Seats" : "Controller";
+  const label = CONTROLLER_OPTIONS[overlay.kind]?.find(([id]) => id === variant)?.[1] || "preview";
+  const readout = overlay.kind === "duo" ? percents.map((value, index) => `P${index + 1} ${value}%`).join(" · ") : `P${target + 1} · ${percent}%`;
+  const colourMeaning = state.controllerColourMode === "players" ? "player seat colours" : "battery-level colours";
+  return { logical: frame, physical: frame, name: `${overlay.kind === "duo" ? seats : overlay.kind === "low" ? "Low battery" : overlay.kind === "connect" ? "Controller connected" : "Charging"} · ${label}`, readout, explain: overlay.kind === "duo" ? `The ${label} choreography reveals every active seat with ${colourMeaning}.` : `The official full-bar signal announces Controller ${target + 1}, then the ${state.padCount}-controller gauge returns.`, badge: "CONTROLLER EVENT" };
 }
 function eventFrame(overlay) {
   const data = eventFrames[overlay.key];
@@ -503,16 +661,21 @@ function getCurrentOutput() {
   const countdownActive = state.timerRunning && state.timerRemaining > 0 && (state.timerSource !== "families" || state.context === "game");
   if (countdownActive && state.timerRemaining <= 300) return countdownFrame();
   if (state.overlay && (clock - state.overlay.start) / 1000 < state.overlay.duration) {
-    return state.overlay.type === "event" ? eventFrame(state.overlay) : controllerPreviewFrame(state.overlay);
+    if (state.overlay.type === "event") return eventFrame(state.overlay);
+    if (state.overlay.type === "witcher-sign") return witcherSignFrame(state.overlay);
+    return controllerPreviewFrame(state.overlay);
   }
   if (state.overlay) state.overlay = null;
   if (state.launchPlaying) return launchFrame();
   if (countdownActive) return countdownFrame();
   if (state.tab === "launches") return launchReadyFrame();
+  if (state.tab === "screen-sync") return screenSyncFrame();
+  if (state.tab === "witcher") return witcherVitalsFrame();
   if (state.display === "disabled") return { logical: blank(), physical: blank(), name: "GabeCubeAura Off", readout: "Steam keeps the bar", explain: "No permanent GabeCubeAura display is selected here. Temporary GabeCubeAura layers can still appear; the master switch in the real plugin is the control that stops everything.", badge: "GABECUBEAURA OFF" };
   const chargeContext = state.chargeMode === "continuous-everywhere" || (state.chargeMode === "continuous-home" && state.context === "home");
   const persistentContext = activeContext(state.controllerWhere);
-  if ((state.padCharging && chargeContext && (state.padCount === 2 ? state.padTwo : state.padOne) < 100) || persistentContext) return controllerFrame();
+  const activeControllerPercent = controllerPercents()[state.controllerTarget] ?? state.padOne;
+  if ((state.padCharging && chargeContext && activeControllerPercent < 100) || persistentContext) return controllerFrame();
   if (state.weatherWhere === "everywhere" || state.weatherWhere === state.context) return weatherFrame();
   let output;
   if (state.display === "customization") output = customizationFrame();
@@ -576,6 +739,28 @@ function drawPhysical(frame) {
   $("#signalName").textContent = output.name;
   $("#signalReadout").textContent = output.readout;
   $("#stageExplain").textContent = output.explain;
+  const controllerLegend = $("#controllerSeatLegend"), showControllerSeats = state.tab === "controllers";
+  $("#logicalFoot").hidden = showControllerSeats;
+  controllerLegend.hidden = !showControllerSeats;
+  if (showControllerSeats) {
+    const percents = controllerPercents();
+    const legendKey = `${state.controllerColourMode}:${state.padPlayerColours.join(":")}:${percents.join(":")}`;
+    if (controllerLegend.dataset.key !== legendKey) {
+      controllerLegend.dataset.key = legendKey;
+      controllerLegend.style.gridTemplateColumns = `repeat(${percents.length}, minmax(0, 1fr))`;
+      controllerLegend.replaceChildren(...percents.map((percent, index) => {
+        const seat = document.createElement("span");
+        seat.innerHTML = `<b>P${index + 1}</b><small>${percent}%</small>`;
+        if (state.controllerColourMode === "players") {
+          const colour = state.padPlayerColours[index];
+          seat.style.borderColor = colour;
+          seat.style.background = `${colour}1f`;
+          seat.querySelector("b").style.color = colour;
+        }
+        return seat;
+      }));
+    }
+  }
   $("#providerBadge").textContent = output.badge;
   $("#mobileSignal").textContent = output.name;
   const stagedGame = state.tab === "launches" ? state.launchGame : state.game;
@@ -821,6 +1006,8 @@ function setTab(tab, configure = true) {
     if (tab === "playtime") { state.display = "performance"; state.context = "game"; state.timerRunning = true; }
     if (tab === "controllers") { state.display = "performance"; state.context = "home"; state.timerRunning = false; state.padCharging = false; state.controllerWhere = "home"; state.weatherWhere = "off"; $("#controllerWhere").value = "home"; $("#weatherWhere").value = "off"; $("#padCharging").checked = false; }
     if (tab === "weather") { state.display = "performance"; state.context = "home"; state.timerRunning = false; state.padCharging = false; state.controllerWhere = "off"; state.weatherWhere = "home"; state.weatherStart = clock; $("#controllerWhere").value = "off"; $("#weatherWhere").value = "home"; $("#padCharging").checked = false; }
+    if (tab === "screen-sync") { state.context = "game"; state.timerRunning = false; state.launchPlaying = false; state.controllerWhere = "off"; state.weatherWhere = "off"; state.screenSyncStart = clock; }
+    if (tab === "witcher") { state.game = "witcher"; state.context = "game"; state.timerRunning = false; state.launchPlaying = false; state.controllerWhere = "off"; state.weatherWhere = "off"; }
     if (tab === "events") { state.display = "performance"; state.context = "game"; state.timerRunning = false; playEvent(); }
     $("#contextChoice").value = state.context;
     $("#displayChoice").value = state.display;
@@ -835,6 +1022,8 @@ function choosePreset(preset) {
   if (preset === "playtime") setTab("playtime");
   if (preset === "controllers") setTab("controllers");
   if (preset === "weather") setTab("weather");
+  if (preset === "screen-sync") setTab("screen-sync");
+  if (preset === "witcher") setTab("witcher");
   if (preset === "notification" || preset === "achievement") {
     state.eventKind = preset;
     setTab("events", false);
@@ -862,11 +1051,26 @@ function playEvent(key = state.eventVariants[state.eventKind]) {
   state.overlay = { type: "event", key, start: clock, duration };
 }
 function syncControllerUI() {
+  state.controllerTarget = clamp(state.controllerTarget, 0, state.padCount - 1);
+  const groupOption = $('#controllerScene option[value="duo"]');
+  groupOption.textContent = state.padCount === 2 ? "Two controllers" : state.padCount === 3 ? "Three Seats" : state.padCount === 4 ? "Four Seats" : "Multiple controllers";
+  groupOption.disabled = state.padCount === 1;
+  if (state.padCount === 1 && state.controllerScene === "duo") state.controllerScene = "gauge";
+  $("#controllerScene").value = state.controllerScene;
+  $$('[data-controller-row]').forEach((row) => { row.hidden = Number(row.dataset.controllerRow) > state.padCount; });
+  $("#controllerTarget").replaceChildren(...Array.from({ length: state.padCount }, (_, index) => new Option(`Controller ${index + 1}`, String(index))));
+  $("#controllerTarget").value = String(state.controllerTarget);
+  $("#padChargingLabel").textContent = `Controller ${state.controllerTarget + 1} charging`;
+  $$('[data-controller-colour-mode]').forEach((button) => {
+    const selected = button.dataset.controllerColourMode === state.controllerColourMode;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+  $("#controllerBatteryColours").hidden = state.controllerColourMode !== "battery";
+  $("#controllerPlayerColours").hidden = state.controllerColourMode !== "players";
   const choices = CONTROLLER_OPTIONS[state.controllerScene];
   $("#controllerVariant").replaceChildren(...choices.map(([id, label]) => new Option(label, id)));
   $("#controllerVariant").value = state.controllerVariants[state.controllerScene];
-  $("#padTwo").disabled = state.padCount !== 2;
-  $("#padCharging").parentElement.lastChild.textContent = state.padCount === 2 ? " Controller 2 charging" : " Controller charging";
 }
 function syncWeatherUI() {
   const choices = WEATHER_OPTIONS[state.weatherCondition];
@@ -878,10 +1082,11 @@ function syncWeatherUI() {
 function playController() {
   state.timerRunning = false;
   const kind = state.controllerScene;
-  state.overlay = { type: "controller", kind, variant: state.controllerVariants[kind], start: clock, duration: kind === "duo" ? 5.6 : kind === "gauge" ? 3 : 3.2 };
+  const duration = kind === "duo" ? 6 : kind === "gauge" ? 3 : kind === "charging" ? 2.8 : 3.2;
+  state.overlay = { type: "controller", kind, variant: state.controllerVariants[kind], target: state.controllerTarget, start: clock, duration };
 }
 function updateOutputs() {
-  const outputs = { customBrightness: `${state.customBrightness} / 255`, customSpeed: `${state.customSpeed} / 100`, launchDuration: `${state.launchDuration} s`, artRow: `${getSampleRow()}%`, cpuLoad: `${state.cpu}%`, cpuTemp: `${state.cpuTemp}°C`, gpuLoad: `${state.gpu}%`, gpuTemp: `${state.gpuTemp}°C`, coolTemp: `${state.coolTemp}°C`, hotTemp: `${state.hotTemp}°C`, timerRemaining: formatTime(state.timerRemaining), padOne: `${state.padOne}%`, padTwo: `${state.padTwo}%`, lowThreshold: `${state.lowThreshold}%`, padBrightness: `${state.padBrightness}%`, weatherBrightness: `${state.weatherBrightness}%`, weatherCutoff: String(state.weatherCutoff), extraDark: String(state.extraDark) };
+  const outputs = { customBrightness: `${state.customBrightness} / 255`, customSpeed: `${state.customSpeed} / 100`, launchDuration: `${state.launchDuration} s`, artRow: `${getSampleRow()}%`, cpuLoad: `${state.cpu}%`, cpuTemp: `${state.cpuTemp}°C`, gpuLoad: `${state.gpu}%`, gpuTemp: `${state.gpuTemp}°C`, coolTemp: `${state.coolTemp}°C`, hotTemp: `${state.hotTemp}°C`, timerRemaining: formatTime(state.timerRemaining), padOne: `${state.padOne}%`, padTwo: `${state.padTwo}%`, padThree: `${state.padThree}%`, padFour: `${state.padFour}%`, lowThreshold: `${state.lowThreshold}%`, padBrightness: `${state.padBrightness}%`, weatherBrightness: `${state.weatherBrightness}%`, weatherCutoff: String(state.weatherCutoff), screenSyncBrightness: `${state.screenSyncBrightness}%`, screenSyncIntensity: `${state.screenSyncIntensity}%`, witcherHealth: `${state.witcherHealth}%`, witcherStamina: `${state.witcherStamina}%`, witcherToxicity: `${state.witcherToxicity}%`, extraDark: String(state.extraDark) };
   Object.entries(outputs).forEach(([key, value]) => { const element = $(`#${key}Value`); if (element) element.textContent = value; });
 }
 function bindValue(id, stateKey, transform = (value) => value, callback) {
@@ -983,13 +1188,18 @@ function bindControls() {
   $("#eventPlay").addEventListener("click", () => playEvent());
   $("#recordToggle").addEventListener("click", () => { state.recording = !state.recording; playEvent(state.recording ? "record-start" : "record-stop"); syncEventUI(); });
   $("#recordIsolation").addEventListener("change", (event) => { state.recordIsolation = event.target.checked; });
-  for (const [id, key] of [["controllerCount", "padCount"], ["padOne", "padOne"], ["padTwo", "padTwo"], ["lowThreshold", "lowThreshold"], ["padBrightness", "padBrightness"]]) bindValue(id, key, Number, id === "controllerCount" ? syncControllerUI : undefined);
+  for (const [id, key] of [["controllerCount", "padCount"], ["padOne", "padOne"], ["padTwo", "padTwo"], ["padThree", "padThree"], ["padFour", "padFour"], ["lowThreshold", "lowThreshold"], ["padBrightness", "padBrightness"]]) bindValue(id, key, Number, id === "controllerCount" ? () => { syncControllerUI(); playController(); } : undefined);
   bindValue("controllerWhere", "controllerWhere", String, () => { if (state.controllerWhere !== "off") { state.weatherWhere = "off"; $("#weatherWhere").value = "off"; } });
   for (const [id, key] of [["chargeMode", "chargeMode"], ["alertWhere", "alertWhere"], ["padHealthy", "padHealthy"], ["padMedium", "padMedium"], ["padLow", "padLow"], ["padCharge", "padCharge"]]) bindValue(id, key);
   $("#controllerScene").addEventListener("change", (event) => { state.controllerScene = event.target.value; syncControllerUI(); playController(); });
   $("#controllerVariant").addEventListener("change", (event) => { state.controllerVariants[state.controllerScene] = event.target.value; playController(); });
+  $("#controllerTarget").addEventListener("change", (event) => { state.controllerTarget = Number(event.target.value); syncControllerUI(); playController(); });
+  $$('[data-controller-colour-mode]').forEach((button) => button.addEventListener("click", () => { state.controllerColourMode = button.dataset.controllerColourMode; syncControllerUI(); }));
+  ["padPlayerOne", "padPlayerTwo", "padPlayerThree", "padPlayerFour"].forEach((id, index) => {
+    $(`#${id}`).addEventListener("input", (event) => { state.padPlayerColours[index] = event.target.value.toLowerCase(); $("#controllerSeatLegend").dataset.key = ""; });
+  });
   $("#controllerPlay").addEventListener("click", playController);
-  $("#padCharging").addEventListener("change", (event) => { state.padCharging = event.target.checked; });
+  $("#padCharging").addEventListener("change", (event) => { state.padCharging = event.target.checked; state.overlay = null; });
   $("#weatherCondition").addEventListener("change", (event) => { state.weatherCondition = event.target.value; state.weatherStart = clock; syncWeatherUI(); });
   $("#weatherVariant").addEventListener("change", (event) => { state.weatherVariants[state.weatherCondition] = Number(event.target.value); state.weatherStart = clock; });
   $("#weatherWhere").addEventListener("change", (event) => { state.weatherWhere = event.target.value; if (state.weatherWhere !== "off") { state.controllerWhere = "off"; $("#controllerWhere").value = "off"; } });
@@ -998,6 +1208,20 @@ function bindControls() {
   bindValue("weatherBrightness", "weatherBrightness", Number);
   bindValue("weatherCutoff", "weatherCutoff", Number);
   $("#weatherReplay").addEventListener("click", () => { state.weatherStart = clock; });
+  bindValue("screenSyncStyle", "screenSyncStyle");
+  bindValue("screenSyncScene", "screenSyncScene", String, () => { state.screenSyncStart = clock; });
+  bindValue("screenSyncBrightness", "screenSyncBrightness", Number);
+  bindValue("screenSyncIntensity", "screenSyncIntensity", Number);
+  $("#screenSyncBlackBars").addEventListener("change", (event) => { state.screenSyncBlackBars = event.target.checked; });
+  $("#screenSyncReplay").addEventListener("click", () => { state.screenSyncStart = clock; });
+  bindValue("witcherHealth", "witcherHealth", Number);
+  bindValue("witcherStamina", "witcherStamina", Number);
+  bindValue("witcherToxicity", "witcherToxicity", Number);
+  bindValue("witcherAdrenaline", "witcherAdrenaline", Number);
+  $("#witcherCombat").addEventListener("change", (event) => { state.witcherCombat = event.target.checked; });
+  $$('[data-witcher-sign]').forEach((button) => button.addEventListener("click", () => {
+    state.overlay = { type: "witcher-sign", sign: button.dataset.witcherSign, start: clock, duration: .9 };
+  }));
   bindValue("contextChoice", "context"); bindValue("displayChoice", "display"); bindValue("extraDark", "extraDark", Number);
   $("#reversePhysical").addEventListener("change", (event) => { state.reversePhysical = event.target.checked; });
   $("#contextSwitch").addEventListener("click", () => { state.context = state.context === "home" ? "game" : "home"; $("#contextChoice").value = state.context; });
@@ -1008,7 +1232,7 @@ function bindControls() {
   });
   $("#resetDemo").addEventListener("click", resetDemo);
   $("#pauseDemo").addEventListener("click", () => { state.paused = !state.paused; $("#pauseDemo").textContent = state.paused ? "▶" : "Ⅱ"; $("#pauseDemo").setAttribute("aria-label", state.paused ? "Play animation" : "Pause animation"); });
-  $("#resetView").addEventListener("click", () => { if (state.overlay) state.overlay.start = clock; else if (state.tab === "events") playEvent(); else if (state.tab === "controllers") playController(); else if (state.tab === "weather") state.weatherStart = clock; else state.timerElapsed = 0; });
+  $("#resetView").addEventListener("click", () => { if (state.overlay) state.overlay.start = clock; else if (state.tab === "events") playEvent(); else if (state.tab === "controllers") playController(); else if (state.tab === "weather") state.weatherStart = clock; else if (state.tab === "screen-sync") state.screenSyncStart = clock; else state.timerElapsed = 0; });
   window.addEventListener("resize", () => { updateSampleLine(); updateMobilePreviewVisibility(); });
   window.addEventListener("scroll", updateMobilePreviewVisibility, { passive: true });
 }
@@ -1016,9 +1240,9 @@ function resetDemo() {
   state = defaultState();
   clock = 0;
   if (customObjectUrl) { URL.revokeObjectURL(customObjectUrl); customObjectUrl = null; }
-  for (const [id, value] of Object.entries({ customBrightness: state.customBrightness, customSpeed: state.customSpeed, launchDuration: state.launchDuration, artSource: state.artSource, artMode: state.artMode, artRow: state.artRow, gameDisplay: "inherit", perfMetric: state.metric, perfDirection: state.direction, cpuLoad: state.cpu, cpuTemp: state.cpuTemp, gpuLoad: state.gpu, gpuTemp: state.gpuTemp, perfPalette: state.palette, perfResponse: state.response, coolColor: state.coolColor, middleColor: state.middleColor, hotColor: state.hotColor, coolTemp: state.coolTemp, hotTemp: state.hotTemp, timerDuration: state.timerDuration, timerScale: state.timerScale, timerRemaining: state.timerRemaining, timerColor: state.timerColor, timerSpeed: state.timerSpeed, controllerCount: state.padCount, padOne: state.padOne, padTwo: state.padTwo, controllerWhere: state.controllerWhere, chargeMode: state.chargeMode, alertWhere: state.alertWhere, lowThreshold: state.lowThreshold, padBrightness: state.padBrightness, padHealthy: state.padHealthy, padMedium: state.padMedium, padLow: state.padLow, padCharge: state.padCharge, weatherCondition: state.weatherCondition, weatherWhere: state.weatherWhere, weatherUnit: state.weatherUnit, weatherBrightness: state.weatherBrightness, weatherCutoff: state.weatherCutoff, extraDark: state.extraDark, contextChoice: state.context, displayChoice: state.display })) { const element = $(`#${id}`); if (element) element.value = String(value); }
+  for (const [id, value] of Object.entries({ customBrightness: state.customBrightness, customSpeed: state.customSpeed, launchDuration: state.launchDuration, artSource: state.artSource, artMode: state.artMode, artRow: state.artRow, gameDisplay: "inherit", perfMetric: state.metric, perfDirection: state.direction, cpuLoad: state.cpu, cpuTemp: state.cpuTemp, gpuLoad: state.gpu, gpuTemp: state.gpuTemp, perfPalette: state.palette, perfResponse: state.response, coolColor: state.coolColor, middleColor: state.middleColor, hotColor: state.hotColor, coolTemp: state.coolTemp, hotTemp: state.hotTemp, timerDuration: state.timerDuration, timerScale: state.timerScale, timerRemaining: state.timerRemaining, timerColor: state.timerColor, timerSpeed: state.timerSpeed, controllerCount: state.padCount, padOne: state.padOne, padTwo: state.padTwo, padThree: state.padThree, padFour: state.padFour, controllerTarget: state.controllerTarget, controllerWhere: state.controllerWhere, chargeMode: state.chargeMode, alertWhere: state.alertWhere, lowThreshold: state.lowThreshold, padBrightness: state.padBrightness, padHealthy: state.padHealthy, padMedium: state.padMedium, padLow: state.padLow, padCharge: state.padCharge, padPlayerOne: state.padPlayerColours[0], padPlayerTwo: state.padPlayerColours[1], padPlayerThree: state.padPlayerColours[2], padPlayerFour: state.padPlayerColours[3], weatherCondition: state.weatherCondition, weatherWhere: state.weatherWhere, weatherUnit: state.weatherUnit, weatherBrightness: state.weatherBrightness, weatherCutoff: state.weatherCutoff, screenSyncStyle: state.screenSyncStyle, screenSyncScene: state.screenSyncScene, screenSyncBrightness: state.screenSyncBrightness, screenSyncIntensity: state.screenSyncIntensity, witcherHealth: state.witcherHealth, witcherStamina: state.witcherStamina, witcherToxicity: state.witcherToxicity, witcherAdrenaline: state.witcherAdrenaline, extraDark: state.extraDark, contextChoice: state.context, displayChoice: state.display })) { const element = $(`#${id}`); if (element) element.value = String(value); }
   $("#timerRemaining").max = String(state.timerDuration * 60);
-  for (const [id, checked] of Object.entries({ perfHome: state.perfHome, recordIsolation: state.recordIsolation, padCharging: state.padCharging, weatherTopbar: state.weatherTopbar, reversePhysical: state.reversePhysical })) $(`#${id}`).checked = checked;
+  for (const [id, checked] of Object.entries({ perfHome: state.perfHome, recordIsolation: state.recordIsolation, padCharging: state.padCharging, weatherTopbar: state.weatherTopbar, screenSyncBlackBars: state.screenSyncBlackBars, witcherCombat: state.witcherCombat, reversePhysical: state.reversePhysical })) $(`#${id}`).checked = checked;
   $$("[data-game]").forEach((button) => button.classList.toggle("selected", button.dataset.game === state.game));
   $$("[data-timer-source]").forEach((button) => button.classList.toggle("selected", button.dataset.timerSource === state.timerSource));
   $("#padCharging").checked = false;
