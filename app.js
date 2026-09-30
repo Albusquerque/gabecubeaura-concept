@@ -1251,10 +1251,18 @@ function resetDemo() {
   $("#pauseDemo").textContent = "Ⅱ";
   syncEventUI(); syncControllerUI(); syncWeatherUI(); syncCustomizationUI(); syncLaunchUI(); updateOutputs(); loadArtwork(); loadLaunchArtwork(); setTab("overview", false);
 }
+function openTabFromHash() {
+  const tab = window.location.hash.slice(1);
+  if (!tab || !$(`.tab[data-tab="${tab}"]`)) return;
+  setTab(tab);
+  requestAnimationFrame(() => $("#lab")?.scrollIntoView({ block: "start" }));
+}
 function init() {
   $("#launchPattern").replaceChildren(...LAUNCH_PATTERNS.map(([value, label]) => new Option(label, value)));
   syncCustomizationUI(); syncLaunchUI(); loadLaunchArtwork();
   bindControls();
+  openTabFromHash();
+  window.addEventListener("hashchange", openTabFromHash);
   syncEventUI(); syncControllerUI(); syncWeatherUI(); updateOutputs(); loadArtwork();
   updateMobilePreviewVisibility();
   requestAnimationFrame(tick);
